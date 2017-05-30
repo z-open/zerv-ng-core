@@ -6,7 +6,7 @@
  * 
  */
 angular
-    .module('zerv-core')
+    .module('zerv.core')
     .provider('$socketio', socketioProvider);
 
 function socketioProvider() {

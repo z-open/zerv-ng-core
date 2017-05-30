@@ -1,1 +1,1 @@
-angular.module('zerv-core', []);
+angular.module('zerv.core', []);

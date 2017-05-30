@@ -19,7 +19,7 @@
  * 
  */
 angular
-    .module('zerv-core')
+    .module('zerv.core')
     // convenient service returning sessionUser
     .factory('sessionUser', function ($auth) {
         return $auth.getSessionUser();

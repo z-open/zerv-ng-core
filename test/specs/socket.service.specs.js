@@ -2,7 +2,7 @@ describe('Unit testing for socket,', function () {
     var mock, socketService;
     var $q, $timeout, $rootScope;
     var socketResponse, connectError;
-    beforeEach(module('zerv-core', function ($socketioProvider) {
+    beforeEach(module('zerv.core', function ($socketioProvider) {
         $socketioProvider.setDebug(true);
     }));
 
