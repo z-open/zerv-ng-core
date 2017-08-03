@@ -11,32 +11,31 @@ angular
 
 function socketioProvider() {
     var debug;
-    var transport = window.ZJSONBIN || { serialize: noop, deserialize: noop };
+    var transport = window.ZJSONBIN || {serialize: noop, deserialize: noop};
     function noop(v) {
         return v;
     }
 
-    this.setDebug = function (value) {
+    this.setDebug = function(value) {
         debug = value;
     };
 
     this.$get = function socketioService($rootScope, $q, $auth) {
-
         return {
             on: on,
             emit: emit,
             logout: $auth.logout,
             fetch: fetch,
             post: post,
-            notify: notify
+            notify: notify,
         };
 
-        ///////////////////
+        // /////////////////
         function on(eventName, callback) {
-            $auth.connect().then(function (socket) {
-                socket.on(eventName, function () {
+            $auth.connect().then(function(socket) {
+                socket.on(eventName, function() {
                     var args = arguments;
-                    $rootScope.$apply(function () {
+                    $rootScope.$apply(function() {
                         callback.apply(socket, args);
                     });
                 });
@@ -44,10 +43,10 @@ function socketioProvider() {
         }
         // deprecated, use post/notify
         function emit(eventName, data, callback) {
-            $auth.connect().then(function (socket) {
-                socket.emit(eventName, data, function () {
+            $auth.connect().then(function(socket) {
+                socket.emit(eventName, data, function() {
                     var args = arguments;
-                    $rootScope.$apply(function () {
+                    $rootScope.$apply(function() {
                         if (callback) {
                             callback.apply(socket, args);
                         }
@@ -62,16 +61,20 @@ function socketioProvider() {
          * 
          */
         function fetch(operation, data) {
-            if (debug) { console.debug('Fetching ' + operation + '...'); }
-            return socketEmit(operation, data)
+            if (debug) {
+                console.debug('Fetching ' + operation + '...');
+            }
+            return socketEmit(operation, data);
         }
 
         /**
          * notify is similar to fetch but more meaningful
          */
         function notify(operation, data) {
-            if (debug) { console.debug('Notifying ' + operation + '...'); }
-            return socketEmit(operation, data)
+            if (debug) {
+                console.debug('Notifying ' + operation + '...');
+            }
+            return socketEmit(operation, data);
         }
 
         /**
@@ -80,7 +83,9 @@ function socketioProvider() {
          * 
          */
         function post(operation, data) {
-            if (debug) { console.debug('Posting ' + operation + '...'); }
+            if (debug) {
+                console.debug('Posting ' + operation + '...');
+            }
             return socketEmit(operation, data);
         }
 
@@ -91,17 +96,16 @@ function socketioProvider() {
                 .then(onConnectionSuccess, onConnectionError)
                 ;// .catch(onConnectionError);
 
-            ////////////
+            // //////////
             function onConnectionSuccess(socket) {
                 var deferred = $q.defer();
-                socket.emit('api', operation, serialized, function (serializedResult) {
-                    const result = transport.deserialize(serializedResult);
+                socket.emit('api', operation, serialized, function(serializedResult) {
+                    var result = transport.deserialize(serializedResult);
 
                     if (result.code) {
                         debug && console.debug('Error on ' + operation + ' ->' + JSON.stringify(result));
-                        deferred.reject({ code: result.code, description: result.data });
-                    }
-                    else {
+                        deferred.reject({code: result.code, description: result.data});
+                    } else {
                         deferred.resolve(result.data);
                     }
                 });
@@ -109,9 +113,9 @@ function socketioProvider() {
             }
 
             function onConnectionError(err) {
-                return $q.reject({ code: 'CONNECTION_ERR', description: err });
+                return $q.reject({code: 'CONNECTION_ERR', description: err});
             }
         }
-    }
+    };
 }
 
