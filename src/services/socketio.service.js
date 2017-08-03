@@ -11,7 +11,7 @@ angular
 
 function socketioProvider() {
     var debug;
-    var transport = window.ZJSONBIN || {serialize: noop, deserialize: noop};
+    var transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {serialize: noop, deserialize: noop};
     function noop(v) {
         return v;
     }
