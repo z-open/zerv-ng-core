@@ -11,6 +11,11 @@ angular
 
 function socketioProvider() {
     var debug;
+    var transport = window.ZJSONBIN || { serialize: noop, deserialize: noop };
+    function noop(v) {
+        return v;
+    }
+
     this.setDebug = function (value) {
         debug = value;
     };
@@ -80,7 +85,7 @@ function socketioProvider() {
         }
 
         function socketEmit(operation, data) {
-            var serialized = JSONBIN.serialize(data);
+            var serialized = transport.serialize(data);
 
             return $auth.connect()
                 .then(onConnectionSuccess, onConnectionError)
@@ -88,13 +93,12 @@ function socketioProvider() {
 
             ////////////
             function onConnectionSuccess(socket) {
-                // but what if we have not connection before the emit, it will queue call...not so good.        
                 var deferred = $q.defer();
                 socket.emit('api', operation, serialized, function (serializedResult) {
-                    const result = JSONBIN.deserialize(serializedResult);
+                    const result = transport.deserialize(serializedResult);
 
                     if (result.code) {
-                        debug && console.debug('Error on ' + operation + ' ->' + JSON.stringify(result)); 
+                        debug && console.debug('Error on ' + operation + ' ->' + JSON.stringify(result));
                         deferred.reject({ code: result.code, description: result.data });
                     }
                     else {
