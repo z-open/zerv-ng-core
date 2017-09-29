@@ -54,5 +54,8 @@
     "test": "./node_modules/karma/bin/karma start"
   },
   "readmeFilename": "README.md",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "eslint": "^4.3.0"
+  }
 }
