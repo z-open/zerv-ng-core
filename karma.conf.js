@@ -1,7 +1,7 @@
 // Karma configuration
 // Generated on Wed Aug 05 2015 15:38:51 GMT-0500 (CDT)
 
-module.exports = function (config) {
+module.exports = function(config) {
     config.set({
 
         // base path that will be used to resolve all patterns (eg. files, exclude)
@@ -16,16 +16,14 @@ module.exports = function (config) {
 
         // list of files / patterns to load in the browser
         files: [
-            // currently necessary to make phantomjs with angular 1.5
+            // currently necessary to make phantomjs work with angular 1.5
             './node_modules/phantomjs-polyfill/bind-polyfill.js',
-            'libraries/lodash/dist/lodash.js',
-            'libraries/angular/angular.js',
-            'libraries/angular-mocks/angular-mocks.js',
-            // 'app/bower_components/angular-mocks/angular-mocks.js',    
-            //'public/test/assets/socket.io/socket.io-1.3.5.js',
+            './node_modules/lodash/lodash.js',
+            './node_modules/angular/angular.js',
+            './node_modules/angular-mocks/angular-mocks.js',
             'src/socket.module.js',
             'src/**/*.*.js',
-            'test/specs/**/*.*.js'
+            'test/specs/**/*.*.js',
         ],
 
         // list of files to exclude
@@ -40,12 +38,12 @@ module.exports = function (config) {
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
             // this is necessary since we do not wrap any longer the angular code as it is in the build (in gulp we do it too)
-            'dist/**/*.js': ['wrap']
+            'dist/**/*.js': ['wrap'],
         },
 
         wrapPreprocessor: {
             // Example: wrap each file in an IIFE
-            template: '(function () { <%= contents %> })()'
+            template: '(function () { <%= contents %> })()',
         },
 
 
@@ -76,6 +74,6 @@ module.exports = function (config) {
 
         // Continuous Integration mode
         // if true, Karma captures browsers, runs the tests and exits
-        singleRun: false
+        singleRun: false,
     });
 };
