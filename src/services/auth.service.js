@@ -45,19 +45,18 @@ function authProvider() {
         reconnectionMaxTime = value * 1000;
     };
 
-    this.$get = function($rootScope, $location, $timeout, $q, $window) {
+    this.$get = function($rootScope, $location, $timeout, $interval, $q, $window) {
         var socket;
-        var userToken = retrieveToken();
-        var sessionUser = {connected: false};
+        localStorage.token = retrieveAuthCode() || localStorage.token;
+        const sessionUser = {connected: false};
 
-        if (!userToken) {
+        if (!localStorage.token) {
+            delete localStorage.origin;
             // @TODO: this right way to redirect if we have no token when we refresh or hit the app.
             //  redirect(loginUrl);
             // but it would prevent most unit tests from running because this module is tighly coupled with all unit tests (depends on it)at this time :
-
-        } else {
-            localStorage.token = userToken;
         }
+
         return {
             connect: connect,
             logout: logout,
@@ -86,7 +85,7 @@ function authProvider() {
         function logout() {
             // connection could be lost during logout..so it could mean we have not logout on server side.
             if (socket) {
-                socket.emit('logout', userToken);
+                socket.emit('logout', localStorage.token);
             }
         }
 
@@ -106,7 +105,7 @@ function authProvider() {
         }
 
         function reconnect() {
-            var deferred = $q.defer();
+            const deferred = $q.defer();
 
             if (sessionUser.connected) {
                 deferred.resolve(socket);
@@ -117,7 +116,7 @@ function authProvider() {
             // if the response does not come quick..let's give up so we don't get stuck waiting
             // @TODO:other way is to watch for a connection error...
             var acceptableDelay;
-            var off = $rootScope.$on('user_connected', function() {
+            const off = $rootScope.$on('user_connected', function() {
                 off();
                 if (acceptableDelay) {
                     $timeout.cancel(acceptableDelay);
@@ -159,10 +158,11 @@ function authProvider() {
 
             // ///////////////////////////////////////////
             function onConnect() {
-                // the socket is connected, time to pass the token to authenticate asap
-                // because the token is about to expire...if it expires we will have to relog in
+                // Pass the origin if any to handle multi session on a browser.
                 setConnectionStatus(false);
-                socket.emit('authenticate', {token: userToken}); // send the jwt
+                // the socket is connected, time to pass the auth code or current token to authenticate asap
+                // because if it expires, user will have to relog in
+                socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin}); // send the jwt
             }
 
             function onDisconnect() {
@@ -177,13 +177,18 @@ function authProvider() {
                 clearTokenTimeout();
                 // the server confirmed that the token is valid...we are good to go
                 if (debug) {
-                    console.debug('authenticated, received new token: ' + (refreshToken != userToken));
+                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token));
                 }
                 localStorage.token = refreshToken;
-                userToken = refreshToken;
-                setLoginUser(userToken);
+
+                // identify origin for multi session
+                if (!localStorage.origin) {
+                    localStorage.origin = refreshToken;
+                }
+
+                setLoginUser(refreshToken);
                 setConnectionStatus(true);
-                requestNewTokenBeforeExpiration(userToken);
+                requestNewTokenBeforeExpiration(refreshToken);
                 $rootScope.$broadcast('user_connected', sessionUser);
             }
 
@@ -191,6 +196,7 @@ function authProvider() {
                 clearTokenTimeout();
                 // token is no longer available.
                 delete localStorage.token;
+                delete localStorage.origin;
                 setConnectionStatus(false);
                 redirect(logoutUrl || loginUrl);
             }
@@ -198,7 +204,7 @@ function authProvider() {
             function onUnauthorized(msg) {
                 clearTokenTimeout();
                 if (debug) {
-                    console.debug('unauthorized: ' + JSON.stringify(msg.data));
+                    console.debug('unauthorized: ' + JSON.stringify(msg));
                 }
                 setConnectionStatus(false);
                 redirect(loginUrl);
@@ -228,6 +234,9 @@ function authProvider() {
             }
 
             function requestNewTokenBeforeExpiration(token) {
+                if (tokenValidityTimeout) {
+                    return;
+                }
                 // request a little before...
                 var payload = decode(token, {complete: false});
 
@@ -237,32 +246,25 @@ function authProvider() {
                 if (debug) {
                     console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + initial + ')');
                 }
-                tokenValidityTimeout = $timeout(function() {
+                tokenValidityTimeout = $interval(function() {
                     if (debug) {
                         console.debug('Time to request new token ' + initial);
                     }
-                    socket.emit('authenticate', {token: token});
+                    // re authenticate with the token from the storage since another browser could have modified it.
+                    if (!localStorage.token) {
+                        onUnauthorized('Token no longer available');
+                    }
+                    socket.emit('authenticate', {token: localStorage.token});
                     // Note: If communication crashes right after we emitted and when servers is sending back the token,
                     // when the client reestablishes the connection, we would have to login because the previous token would be invalidated.
                 }, duration * 1000);
             }
         }
 
-        function retrieveToken() {
+        function retrieveAuthCode() {
             var userToken = $location.search().token;
-            if (userToken) {
-                if (debug) {
-                    console.debug('Using token passed during redirection: ' + userToken);
-                }
-            } else {
-                userToken = localStorage.token;
-                if (userToken) {
-                    if (debug) {
-                        console.debug('Using Token in local storage: ' + userToken);
-                    }
-                } else {
-
-                }
+            if (userToken && debug) {
+                console.debug('Using Auth Code passed during redirection: ' + userToken);
             }
             return userToken;
         }
