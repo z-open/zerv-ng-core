@@ -27,7 +27,7 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    var loginUrl, logoutUrl, debug, reconnectionMaxTime = 15;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15;
 
     this.setDebug = function(value) {
         debug = value;
@@ -46,7 +46,7 @@ function authProvider() {
     };
 
     this.$get = function($rootScope, $location, $timeout, $interval, $q, $window) {
-        var socket;
+        let socket;
         localStorage.token = retrieveAuthCode() || localStorage.token;
         const sessionUser = {connected: false};
 
@@ -90,7 +90,7 @@ function authProvider() {
         }
 
         function getForValidConnection() {
-            var deferred = $q.defer();
+            const deferred = $q.defer();
             if (sessionUser.connected) {
                 deferred.resolve(socket);
             } else {
@@ -115,7 +115,7 @@ function authProvider() {
 
             // if the response does not come quick..let's give up so we don't get stuck waiting
             // @TODO:other way is to watch for a connection error...
-            var acceptableDelay;
+            let acceptableDelay;
             const off = $rootScope.$on('user_connected', function() {
                 off();
                 if (acceptableDelay) {
@@ -137,7 +137,7 @@ function authProvider() {
                 // already called...
                 return;
             }
-            var tokenValidityTimeout;
+            let tokenValidityTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
             socket = io.connect({
                 'forceNew': true,
@@ -216,7 +216,7 @@ function authProvider() {
             }
 
             function setLoginUser(token) {
-                var payload = decode(token);
+                const payload = decode(token);
                 return _.assign(sessionUser, payload);
             }
 
@@ -227,9 +227,9 @@ function authProvider() {
             }
 
             function decode(token) {
-                var base64Url = token.split('.')[1];
-                var base64 = base64Url.replace('-', '+').replace('_', '/');
-                var payload = JSON.parse($window.atob(base64));
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace('-', '+').replace('_', '/');
+                const payload = JSON.parse($window.atob(base64));
                 return payload;
             }
 
@@ -238,11 +238,11 @@ function authProvider() {
                     return;
                 }
                 // request a little before...
-                var payload = decode(token, {complete: false});
+                const payload = decode(token, {complete: false});
 
-                var initial = payload.dur;
+                const initial = payload.dur;
 
-                var duration = (initial * 90 / 100) | 0;
+                const duration = (initial * 90 / 100) | 0;
                 if (debug) {
                     console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + initial + ')');
                 }
@@ -262,7 +262,7 @@ function authProvider() {
         }
 
         function retrieveAuthCode() {
-            var userToken = $location.search().token;
+            const userToken = $location.search().token;
             if (userToken && debug) {
                 console.debug('Using Auth Code passed during redirection: ' + userToken);
             }

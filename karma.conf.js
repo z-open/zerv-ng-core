@@ -38,7 +38,15 @@ module.exports = function(config) {
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
             // this is necessary since we do not wrap any longer the angular code as it is in the build (in gulp we do it too)
-            'dist/**/*.js': ['wrap'],
+            'src/**/*.js': ['wrap', 'babel'],
+        },
+
+        babelPreprocessor: {
+            options: {
+                presets: ['env'],
+                // sourceMap: 'inline',
+                retainLines: true,
+            },
         },
 
         wrapPreprocessor: {

@@ -5,6 +5,8 @@
 // the main gulp reference
 var gulp = require('gulp');
 
+const babel = require('gulp-babel');
+
 // deletes files used during build (https://www.npmjs.com/package/gulp-clean)
 var clean = require('gulp-clean');
 
@@ -17,17 +19,11 @@ var annotate = require('gulp-ng-annotate');
 // add an IIFE to each file () 
 var iife = require('gulp-iife');
 
-// just prints a filesize of a file (https://www.npmjs.com/package/gulp-filesize)
-var filesize = require('gulp-filesize');
-
 // watches files for changes and reruns tasks (https://www.npmjs.com/package/gulp-watch)
 var watch = require('gulp-watch');
 
 // karma server to run automated unit tests (http://karma-runner.github.io/0.13/index.html)
 var Server = require('karma').Server;
-
-// sourcemaps (https://www.npmjs.com/package/gulp-sourcemaps)
-var sourcemaps = require('gulp-sourcemaps');
 
 // gulp-bump (https://www.npmjs.com/package/gulp-bump)
 var bump = require('gulp-bump');
@@ -49,39 +45,22 @@ var appFiles = [
 // Tasks
 // ////////////////////////////////////////////
 
-
-// perform a variety of operations on our app js files
-gulp.task('app-js-dev', ['iife-build-dev'], function() {
-    // model is not iife
-    var src = ['build/app-iife.js'];
-    // var src = appFiles.concat(genFiles);
-    return gulp.src(src)
-    // so that we load the source map in iife-build
-        .pipe(sourcemaps.init({loadMaps: true}))
-        .pipe(concat('zerv-ng-core.js'))
-        .pipe(annotate())
-        .pipe(filesize())
-        .pipe(sourcemaps.write())
-        .pipe(gulp.dest('dist/'));
-});
-
-// wrap all angular code in bracket and add useStrict, and add sourcemap in dev
-gulp.task('iife-build-dev', function() {
+gulp.task('lib', function() {
     return gulp.src(appFiles)
-        .pipe(sourcemaps.init())
         .pipe(iife({
             useStrict: true,
             trimCode: true,
             prependSemicolon: false,
             bindThis: false,
         }))
-        .pipe(concat('app-iife.js'))
-
-        // .pipe(annotate())
-        // .pipe(filesize())        
-        .pipe(sourcemaps.write())
-        .pipe(gulp.dest('build/'));
+        .pipe(babel({
+            presets: ['env'],
+        }))
+        .pipe(concat('zerv-ng-core.js'))
+        .pipe(annotate())
+        .pipe(gulp.dest('dist/'));
 });
+
 
 // single run testing
 gulp.task('test', function(done) {
@@ -108,7 +87,6 @@ gulp.task('tdd', function(done) {
 // watch the app .js files for changes and execute the app-js task if necessary
 gulp.task('app-watch', function() {
     watch(appFiles, function(file) {
-        gulp.start('app-js-dev');
     });
 });
 
@@ -127,13 +105,13 @@ gulp.task('bump-dev', function() {
 });
 
 // build angular-socketio.js for dev (with map) 
-gulp.task('build', ['app-js-dev'], function() {
+gulp.task('build', ['lib'], function() {
         gulp.start(['test', 'cleanup']);
 });
 
 
 // continuous watchers
-gulp.task('default', ['app-js-dev'], function() {
+gulp.task('default', ['lib'], function() {
     gulp.start(['app-watch', 'tdd']);
 });
 
