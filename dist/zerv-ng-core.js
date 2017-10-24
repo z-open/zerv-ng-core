@@ -213,7 +213,7 @@
                         console.debug('unauthorized: ' + JSON.stringify(msg));
                     }
                     setConnectionStatus(false);
-                    redirect(loginUrl);
+                    msg === 'wrong_user' ? window.location.reload() : redirect(loginUrl);
                 }
 
                 function setConnectionStatus(connected) {
