@@ -10,8 +10,8 @@ angular
     .provider('$socketio', socketioProvider);
 
 function socketioProvider() {
-    var debug;
-    var transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {serialize: noop, deserialize: noop};
+    let debug;
+    const transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {serialize: noop, deserialize: noop};
     function noop(v) {
         return v;
     }
@@ -34,7 +34,7 @@ function socketioProvider() {
         function on(eventName, callback) {
             $auth.connect().then(function(socket) {
                 socket.on(eventName, function() {
-                    var args = arguments;
+                    const args = arguments;
                     $rootScope.$apply(function() {
                         callback.apply(socket, args);
                     });
@@ -45,7 +45,7 @@ function socketioProvider() {
         function emit(eventName, data, callback) {
             $auth.connect().then(function(socket) {
                 socket.emit(eventName, data, function() {
-                    var args = arguments;
+                    const args = arguments;
                     $rootScope.$apply(function() {
                         if (callback) {
                             callback.apply(socket, args);
@@ -90,7 +90,7 @@ function socketioProvider() {
         }
 
         function socketEmit(operation, data) {
-            var serialized = transport.serialize(data);
+            const serialized = transport.serialize(data);
 
             return $auth.connect()
                 .then(onConnectionSuccess, onConnectionError)
@@ -98,9 +98,9 @@ function socketioProvider() {
 
             // //////////
             function onConnectionSuccess(socket) {
-                var deferred = $q.defer();
+                const deferred = $q.defer();
                 socket.emit('api', operation, serialized, function(serializedResult) {
-                    var result = transport.deserialize(serializedResult);
+                    const result = transport.deserialize(serializedResult);
 
                     if (result.code) {
                         debug && console.debug('Error on ' + operation + ' ->' + JSON.stringify(result));
