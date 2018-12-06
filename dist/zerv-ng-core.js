@@ -228,7 +228,13 @@
 
                 function clearTokenTimeout() {
                     if (tokenValidityTimeout) {
-                        $timeout.cancel(tokenValidityTimeout);
+                        // Avoid the angular $timeout error issue defined here:
+                        // https://github.com/angular/angular.js/blob/master/CHANGELOG.md#timeout-due-to
+                        try {
+                            $timeout.cancel(tokenValidityTimeout);
+                        } catch (err) {
+                            console.error('Clearing timeout error: ' + String(err));
+                        }
                     }
                 }
 
