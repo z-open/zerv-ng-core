@@ -18,7 +18,6 @@ describe('Unit testing for auth,', function () {
         mockSocket();
         mockIo();
         
-        spyOn(window.location,'replace'); 
 
         inject(function ($injector, _$rootScope_, _$q_, _$timeout_) {
             $auth = $injector.get('$auth');
@@ -27,6 +26,7 @@ describe('Unit testing for auth,', function () {
             $q = _$q_;
             $timeout = _$timeout_;
         });
+        spyOn($auth,'redirect'); 
 
     });
     
@@ -107,7 +107,8 @@ describe('Unit testing for auth,', function () {
                 // //fake server responding..
                 socket.emit('logged_out');
                 expect( localStorage.token ).not.toBeDefined();
-                expect(window.location.replace).toHaveBeenCalled();
+                expect($auth.redirect).toHaveBeenCalled();
+          //      expect(window.location.replace).toHaveBeenCalled();
                  done();
             });
 

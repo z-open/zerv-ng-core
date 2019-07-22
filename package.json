@@ -6,22 +6,22 @@
   "repository": {
     "url": ""
   },
-  "version": "1.1.2",
+  "version": "1.1.4",
   "dependencies": {
-    "angular": "~1.5.0",
+    "angular": "~1.5.8",
     "lodash": "~4.16.2",
-    "zjsonbin": "z-open/zjsonbin#0.0.1"
+    "zjsonbin": "github:z-open/zjsonbin#0.0.1"
   },
   "devDependencies": {
     "angular-mocks": "~1.5.0",
-    "babel-preset-env": "^1.6.0",
+    "babel-preset-env": "^1.7.0",
     "body-parser": "~1.13.3",
-    "eslint": "^4.3.0",
+    "eslint": "^4.19.1",
     "eslint-config-google": "^0.9.1",
     "express": "~4.10.6",
     "git-describe": "^2.0.1",
     "gulp": "^3.9.0",
-    "gulp-babel": "^7.0.0",
+    "gulp-babel": "^7.0.1",
     "gulp-bump": "^1.0.0",
     "gulp-clean": "^0.3.1",
     "gulp-concat": "^2.6.0",
@@ -31,21 +31,21 @@
     "jasmine-core": "^2.4.1",
     "karma": "^0.13.19",
     "karma-babel-preprocessor": "^6.0.1",
+    "karma-chrome-launcher": "2.2.0",
     "karma-jasmine": "^0.3.6",
     "karma-jshint": "^0.1.0",
-    "karma-phantomjs-launcher": "^0.2.3",
     "karma-wrap-preprocessor": "^0.1.0",
     "mocha": "~1.17.0",
-    "nodemon": "^1.8.1",
+    "nodemon": "^1.19.1",
     "phantomjs": "^1.9.19",
     "phantomjs-polyfill": "0.0.2",
     "request": "~2.19.0",
-    "serve-static": "^1.7.1",
+    "serve-static": "^1.14.1",
     "server-destroy": "~1.0.1",
     "should": "~1.2.2",
     "socket.io": "^1.0.4",
     "socket.io-client": "^1.0.4",
-    "socketio-auth": "git://github.com/z-open/socketio-auth"
+    "socketio-auth": "git://github.com/z-open/socketio-auth.git"
   },
   "scripts": {
     "build": "gulp build",
