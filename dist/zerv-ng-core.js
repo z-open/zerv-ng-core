@@ -260,8 +260,8 @@
                         console.debug('unauthorized: ' + JSON.stringify(msg));
                     }
                     setConnectionStatus(false);
-                    if (onUnauthorized) {
-                        onUnauthorized(msg);
+                    if (onUnauthorizedCallback) {
+                        onUnauthorizedCallback(msg);
                     }
                     switch (msg) {
                         case 'wrong_user':
