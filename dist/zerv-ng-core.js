@@ -44,7 +44,8 @@
             reconnectionMaxTime = 15,
             onSessionExpirationCallback = void 0,
             onConnectCallback = void 0,
-            onDisconnectCallback = void 0;
+            onDisconnectCallback = void 0,
+            onUnauthorizedCallback = void 0;
 
         this.setDebug = function (value) {
             debug = value;
@@ -73,6 +74,11 @@
 
         this.onDisconnect = function (callback) {
             onDisconnectCallback = callback;
+            return this;
+        };
+
+        this.onUnauthorized = function (callback) {
+            onUnauthorizedCallback = callback;
             return this;
         };
 
@@ -254,6 +260,9 @@
                         console.debug('unauthorized: ' + JSON.stringify(msg));
                     }
                     setConnectionStatus(false);
+                    if (onUnauthorized) {
+                        onUnauthorized(msg);
+                    }
                     switch (msg) {
                         case 'wrong_user':
                             window.location.reload();

@@ -28,7 +28,7 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
 
     this.setDebug = function(value) {
         debug = value;
@@ -57,6 +57,11 @@ function authProvider() {
 
     this.onDisconnect = function(callback) {
         onDisconnectCallback = callback;
+        return this;
+    };
+
+    this.onUnauthorized = function(callback) {
+        onUnauthorizedCallback = callback;
         return this;
     };
 
@@ -244,6 +249,9 @@ function authProvider() {
                     console.debug('unauthorized: ' + JSON.stringify(msg));
                 }
                 setConnectionStatus(false);
+                if (onUnauthorized) {
+                    onUnauthorized(msg);
+                }
                 switch (msg) {
                     case 'wrong_user':
                         window.location.reload();
