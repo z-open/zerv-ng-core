@@ -3,6 +3,7 @@
  * This provider handles the handshake to authenticate a user and maintain a secure web socket connection via tokens.
  * It also sets the login and logout url participating in the authentication.
  * 
+ * onSessionExpiration will be called when the user session ends (the token expires or cannot be refreshed).
  * 
  * usage examples:
  * 
@@ -27,28 +28,57 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
 
     this.setDebug = function(value) {
         debug = value;
+        return this;
     };
 
     this.setLoginUrl = function(value) {
         loginUrl = value;
+        return this;
     };
 
     this.setLogoutUrl = function(value) {
         logoutUrl = value;
+        return this;
+    };
+
+    this.onSessionExpiration = function(callback) {
+        onSessionExpirationCallback = callback;
+        return this;
+    };
+
+    this.onConnect = function(callback) {
+        onConnectCallback = callback;
+        return this;
+    };
+
+    this.onDisconnect = function(callback) {
+        onDisconnectCallback = callback;
+        return this;
+    };
+
+    this.onUnauthorized = function(callback) {
+        onUnauthorizedCallback = callback;
+        return this;
     };
 
     this.setReconnectionMaxTimeInSecs = function(value) {
         reconnectionMaxTime = value * 1000;
+        return this;
     };
 
-    this.$get = function($rootScope, $location, $timeout, $interval, $q, $window) {
+    this.$get = function($rootScope, $location, $timeout, $q, $window) {
         let socket;
         localStorage.token = retrieveAuthCode() || localStorage.token;
-        const sessionUser = {connected: false};
+        const sessionUser = {
+            connected: false,
+            initialConnection: null,
+            lastConnection: null,
+            connectionErrors: 0,
+        };
 
         if (!localStorage.token) {
             delete localStorage.origin;
@@ -57,11 +87,14 @@ function authProvider() {
             // but it would prevent most unit tests from running because this module is tighly coupled with all unit tests (depends on it)at this time :
         }
 
-        return {
+        const service = {
             connect: connect,
             logout: logout,
             getSessionUser: getSessionUser,
+            redirect,
         };
+
+        return service;
 
 
         // /////////////////
@@ -137,7 +170,7 @@ function authProvider() {
                 // already called...
                 return;
             }
-            let tokenValidityTimeout;
+            let tokenRequestTimeout, graceTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
             socket = io.connect({
                 'forceNew': true,
@@ -174,10 +207,9 @@ function authProvider() {
             }
 
             function onAuthenticated(refreshToken) {
-                clearTokenTimeout();
                 // the server confirmed that the token is valid...we are good to go
                 if (debug) {
-                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token));
+                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: '+sessionUser.connected);
                 }
                 localStorage.token = refreshToken;
 
@@ -185,47 +217,85 @@ function authProvider() {
                 if (!localStorage.origin) {
                     localStorage.origin = refreshToken;
                 }
+                const payload = decode(refreshToken);
+                setLoginUser(payload);
 
-                setLoginUser(refreshToken);
-                setConnectionStatus(true);
-                requestNewTokenBeforeExpiration(refreshToken);
-                $rootScope.$broadcast('user_connected', sessionUser);
+                if (!sessionUser.connected) {
+                    setConnectionStatus(true);
+                    $rootScope.$broadcast('user_connected', sessionUser);
+                    if (!sessionUser.initialConnection) {
+                        sessionUser.initialConnection = new Date();
+                    } else {
+                        sessionUser.lastConnection = new Date();
+                        sessionUser.connectionErrors++;
+                        $rootScope.$broadcast('user_reconnected', sessionUser);
+                    }
+                }
+                requestNewTokenBeforeExpiration(payload);
             }
 
             function onLogOut() {
-                clearTokenTimeout();
+                clearNewTokenRequestTimeout();
                 // token is no longer available.
                 delete localStorage.token;
                 delete localStorage.origin;
                 setConnectionStatus(false);
-                redirect(logoutUrl || loginUrl);
+                service.redirect(logoutUrl || loginUrl);
             }
 
             function onUnauthorized(msg) {
-                clearTokenTimeout();
+                clearNewTokenRequestTimeout();
                 if (debug) {
                     console.debug('unauthorized: ' + JSON.stringify(msg));
                 }
                 setConnectionStatus(false);
-                msg === 'wrong_user' ? window.location.reload() : redirect(loginUrl);
+                if (onUnauthorizedCallback) {
+                    onUnauthorizedCallback(msg);
+                }
+                switch (msg) {
+                    case 'wrong_user':
+                        window.location.reload();
+                        break;
+                    case 'session_expired':
+                        if (onSessionExpirationCallback) {
+                            onSessionExpirationCallback();
+                            break;
+                        }
+                    default:
+                        service.redirect(loginUrl);
+                }
             }
 
             function setConnectionStatus(connected) {
-                sessionUser.connected = connected;
-                // console.debug("Connection status:" + JSON.stringify(sessionUser));
+                if (sessionUser.connected !== connected) {
+                    sessionUser.connected = connected;
+                    if (connected && onConnectCallback) {
+                        onConnectCallback(sessionUser);
+                    } else if (!connected && onDisconnectCallback) {
+                        onDisconnectCallback(sessionUser);
+                    }
+                    // console.debug("Connection status:" + JSON.stringify(sessionUser));
+                }
             }
 
-            function setLoginUser(token) {
-                const payload = decode(token);
+            function setLoginUser(payload) {
                 return _.assign(sessionUser, payload);
             }
 
-            function clearTokenTimeout() {
-                if (tokenValidityTimeout) {
+            function clearNewTokenRequestTimeout() {
+                if (tokenRequestTimeout) {
                     // Avoid the angular $timeout error issue defined here:
                     // https://github.com/angular/angular.js/blob/master/CHANGELOG.md#timeout-due-to
                     try {
-                        $timeout.cancel(tokenValidityTimeout);
+                        $timeout.cancel(tokenRequestTimeout);
+                    } catch (err) {
+                        console.error('Clearing timeout error: ' + String(err));
+                    }
+
+                    tokenRequestTimeout = null;
+
+                    try {
+                        $timeout.cancel(graceTimeout);
                     } catch (err) {
                         console.error('Clearing timeout error: ' + String(err));
                     }
@@ -239,30 +309,35 @@ function authProvider() {
                 return payload;
             }
 
-            function requestNewTokenBeforeExpiration(token) {
-                if (tokenValidityTimeout) {
-                    return;
-                }
-                // request a little before...
-                const payload = decode(token, {complete: false});
+            function requestNewTokenBeforeExpiration(payload) {
+                clearNewTokenRequestTimeout();
+                const expectancy = payload.dur;
 
-                const initial = payload.dur;
-
-                const duration = (initial * 90 / 100) | 0;
+                const duration = (expectancy * 50 / 100) | 0;
                 if (debug) {
-                    console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + initial + ')');
+                    console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
                 }
-                tokenValidityTimeout = $interval(function() {
+                tokenRequestTimeout = $timeout(function() {
                     if (debug) {
-                        console.debug('Time to request new token ' + initial);
+                        console.debug('Time to request new token');
                     }
                     // re authenticate with the token from the storage since another browser could have modified it.
                     if (!localStorage.token) {
                         onUnauthorized('Token no longer available');
                     }
+
                     socket.emit('authenticate', {token: localStorage.token});
-                    // Note: If communication crashes right after we emitted and when servers is sending back the token,
-                    // when the client reestablishes the connection, we would have to login because the previous token would be invalidated.
+                    // Note: If communication crashes right after we emitted and before server sends back the token,
+                    // when the client reestablishes the connection, it might be able to authenticate if the token is still valid, otherwise we will be sent back to login.
+
+                    const tokenToRefresh = localStorage.token;
+                    // this is the amount of time to retrieve the new token.
+                    graceTimeout = $timeout(function() {
+                        if (tokenToRefresh === localStorage.token) {
+                            // The user session is ended if there is no valid toke
+                            onUnauthorized('session_expired');
+                        }
+                    }, (expectancy - duration)*1000);
                 }, duration * 1000);
             }
         }
@@ -276,7 +351,7 @@ function authProvider() {
         }
 
         function redirect(url) {
-            window.location.replace(url || 'badUrl.html');
+            $window.location.replace(url || 'badUrl.html');
         }
     };
 }

@@ -46,7 +46,7 @@ module.exports = function(config) {
                 presets: ['env'],
                 // sourceMap: 'inline',
                 retainLines: true,
-            },
+            }
         },
 
         wrapPreprocessor: {
@@ -77,8 +77,8 @@ module.exports = function(config) {
         // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
 
         // uncomment this line when debugging unit tests in Chrome:
-        // browsers: ['PhantomJS', 'Chrome'],
-        browsers: ['PhantomJS'],
+        // browsers: ['PhantomJS', 'Chrome','ChromeHeadless],
+        browsers: ['ChromeHeadless'],
 
         // Continuous Integration mode
         // if true, Karma captures browsers, runs the tests and exits
