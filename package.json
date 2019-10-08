@@ -6,7 +6,7 @@
   "repository": {
     "url": ""
   },
-  "version": "1.1.4",
+  "version": "1.1.6",
   "dependencies": {
     "angular": "~1.5.8",
     "lodash": "4.17.15",
@@ -15,17 +15,17 @@
   "devDependencies": {
     "angular-mocks": "~1.5.0",
     "babel-preset-env": "^1.7.0",
-    "body-parser": "~1.13.3",
+    "body-parser": "^1.19.0",
     "eslint": "^4.19.1",
     "eslint-config-google": "^0.9.1",
-    "express": "~4.10.6",
+    "express": "^4.17.1",
     "git-describe": "^2.0.1",
     "gulp": "^3.9.0",
     "gulp-babel": "^7.0.1",
     "gulp-bump": "^1.0.0",
     "gulp-clean": "^0.3.1",
     "gulp-concat": "^2.6.0",
-    "gulp-iife": "^0.3.0",
+    "gulp-iife": "^0.4.0",
     "gulp-ng-annotate": "^1.1.0",
     "gulp-watch": "^4.3.5",
     "jasmine-core": "^2.4.1",
@@ -39,7 +39,7 @@
     "nodemon": "^1.19.1",
     "phantomjs": "^1.9.19",
     "phantomjs-polyfill": "0.0.2",
-    "request": "~2.19.0",
+    "request": "^2.88.0",
     "serve-static": "^1.14.1",
     "server-destroy": "~1.0.1",
     "should": "~1.2.2",
