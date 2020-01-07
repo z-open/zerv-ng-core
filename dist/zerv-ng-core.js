@@ -179,6 +179,8 @@
                     deferred.reject('TIMEOUT');
                 }, reconnectionMaxTime);
 
+                socket.connect();
+
                 return deferred.promise;
             }
 
