@@ -37,8 +37,7 @@ module.exports = function(config) {
         // preprocess matching files before serving them to the browser
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
-            // this is necessary since we do not wrap any longer the angular code as it is in the build (in gulp we do it too)
-            'src/**/*.js': ['wrap', 'babel'],
+            'src/**/*.js': ['babel'],
         },
 
         babelPreprocessor: {
@@ -48,12 +47,6 @@ module.exports = function(config) {
                 retainLines: true,
             }
         },
-
-        wrapPreprocessor: {
-            // Example: wrap each file in an IIFE
-            template: '(function () { <%= contents %> })()',
-        },
-
 
         // test results reporter to use
         // possible values: 'dots', 'progress'

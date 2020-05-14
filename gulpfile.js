@@ -19,9 +19,6 @@ const annotate = require('gulp-ng-annotate');
 // add an IIFE to each file () 
 const iife = require('gulp-iife');
 
-// watches files for changes and reruns tasks (https://www.npmjs.com/package/gulp-watch)
-const watch = require('gulp-watch');
-
 // karma server to run automated unit tests (http://karma-runner.github.io/0.13/index.html)
 const Server = require('karma').Server;
 
