@@ -22,13 +22,6 @@ const iife = require('gulp-iife');
 // karma server to run automated unit tests (http://karma-runner.github.io/0.13/index.html)
 const Server = require('karma').Server;
 
-// gulp-bump (https://www.npmjs.com/package/gulp-bump)
-const bump = require('gulp-bump');
-
-// git-describe (https://www.npmjs.com/package/git-describe)
-const gitDescribe = require('git-describe');
-
-
 // ////////////////////////////////////////////
 // Variables
 // ////////////////////////////////////////////
@@ -45,7 +38,7 @@ const appFiles = [
 gulp.task('lib', () => {
     return gulp.src(appFiles)
         .pipe(iife({
-            useStrict: true,
+            useStrict: false,
             trimCode: true,
             prependSemicolon: false,
             bindThis: false,
@@ -80,29 +73,6 @@ gulp.task('tdd', (done) => {
     }).start();
 });
 
-// clean up files after builds
-gulp.task('cleanup', () => {
-    return gulp.src('dist', {read: false}).pipe(clean());
-});
+gulp.task('build', gulp.series('lib', 'test'));
 
-// bump the dev version (NOTE: NOT IN USE RIGHT NOW)
-gulp.task('bump-dev', () => {
-    const gitInfo = gitDescribe(__dirname);
-
-    gulp.src(['./bower.json', './package.json'])
-        .pipe(bump({type: 'prerelease', preid: gitInfo.hash}))
-        .pipe(gulp.dest('./'));
-});
-
-// build angular-socketio.js for dev (with map) 
-gulp.task('build', gulp.series('lib', () => {
-    return gulp.series('test', 'cleanup')();
-}));
-
-
-// continuous watchers
-gulp.task('default', gulp.series('lib', () => {
-    return gulp.series('tdd')();
-}));
-
-
+gulp.task('default', gulp.series('lib', 'tdd'));
