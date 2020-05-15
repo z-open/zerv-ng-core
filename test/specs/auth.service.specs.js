@@ -137,7 +137,8 @@ describe('Unit testing for auth,', function () {
                // console.log("on: " + event);
                 socketListeners[event] = fn;
                 return socket;
-            }
+            },
+            connect: () => _.noop
         }
 
         spyOn(socket, 'emit').and.callFake(

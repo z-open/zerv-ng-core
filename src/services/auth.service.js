@@ -1,23 +1,23 @@
 
-/** 
+/**
  * This provider handles the handshake to authenticate a user and maintain a secure web socket connection via tokens.
  * It also sets the login and logout url participating in the authentication.
- * 
+ *
  * onSessionExpiration will be called when the user session ends (the token expires or cannot be refreshed).
- * 
+ *
  * usage examples:
- * 
+ *
  * In the config of the app module:
  * socketServiceProvider.setLoginUrl('/access#/login');
  * socketServiceProvider.setLogoutUrl('/access#/login');
  * socketServiceProvider.setReconnectionMaxTimeInSecs(15);
  * This defines how much time we can wait to establish a successul connection before rejecting the connection (socketService.connectIO) with a timeout. by default, it will try for 15 seconds to get a connection and then give up
- *  
+ *
  * Before any socket use in your services or resolve blocks, connect() makes sure that we have an established authenticated connection by using the following:
  * socketService.connect().then(
  * function(socket){ ... socket.emit().. }).catch(function(err) {...})
- * 
- * 
+ *
+ *
  */
 angular
     .module('zerv.core')
@@ -29,6 +29,8 @@ angular
 
 function authProvider() {
     let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
+
+    localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 
     this.setDebug = function(value) {
         debug = value;
@@ -72,7 +74,6 @@ function authProvider() {
 
     this.$get = function($rootScope, $location, $timeout, $q, $window) {
         let socket;
-        localStorage.token = retrieveAuthCode() || localStorage.token;
         const sessionUser = {
             connected: false,
             initialConnection: null,
@@ -83,7 +84,7 @@ function authProvider() {
         if (!localStorage.token) {
             delete localStorage.origin;
             // @TODO: this right way to redirect if we have no token when we refresh or hit the app.
-            //  redirect(loginUrl);
+            //  redirectToLogin();
             // but it would prevent most unit tests from running because this module is tighly coupled with all unit tests (depends on it)at this time :
         }
 
@@ -100,12 +101,12 @@ function authProvider() {
         // /////////////////
 
         function getSessionUser() {
-            // the object will have the user information when the connection is established. Otherwise its connection property will be false; 
+            // the object will have the user information when the connection is established. Otherwise its connection property will be false;
             return sessionUser;
         }
 
         /**
-         * returns a promise 
+         * returns a promise
          * the success function receives the socket as a parameter
          */
         function connect() {
@@ -145,7 +146,6 @@ function authProvider() {
             }
             // @TODO TO THINK ABOUT:, if the socket is connecting already, means that a connect was called already by another async call, so just wait for user_connected
 
-
             // if the response does not come quick..let's give up so we don't get stuck waiting
             // @TODO:other way is to watch for a connection error...
             let acceptableDelay;
@@ -161,6 +161,8 @@ function authProvider() {
                 off();
                 deferred.reject('TIMEOUT');
             }, reconnectionMaxTime);
+
+            socket.connect();
 
             return deferred.promise;
         }
@@ -209,7 +211,7 @@ function authProvider() {
             function onAuthenticated(refreshToken) {
                 // the server confirmed that the token is valid...we are good to go
                 if (debug) {
-                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: '+sessionUser.connected);
+                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
                 }
                 localStorage.token = refreshToken;
 
@@ -262,7 +264,7 @@ function authProvider() {
                             break;
                         }
                     default:
-                        service.redirect(loginUrl);
+                        redirectToLogin();
                 }
             }
 
@@ -337,22 +339,34 @@ function authProvider() {
                             // The user session is ended if there is no valid toke
                             onUnauthorized('session_expired');
                         }
-                    }, (expectancy - duration)*1000);
+                    }, (expectancy - duration) * 1000);
                 }, duration * 1000);
             }
-        }
-
-        function retrieveAuthCode() {
-            const userToken = $location.search().token;
-            if (userToken && debug) {
-                console.debug('Using Auth Code passed during redirection: ' + userToken);
-            }
-            return userToken;
         }
 
         function redirect(url) {
             $window.location.replace(url || 'badUrl.html');
         }
+
+        function redirectToLogin() {
+            const url = window.location.protocol + '//' + window.location.host + loginUrl + '?to=' + encodeURIComponent(window.location.href);
+            service.redirect(url);
+        }
     };
+
+    function retrieveAuthCodeFromUrlOrTokenFromStorage() {
+        // token will alsway come last in the url if any.
+        let pos = window.location.href.indexOf('token=');
+        if (pos !== -1) {
+            const url = window.location.href.substring(0, pos);
+            pos += 6;
+            localStorage.token = window.location.href.substring(pos);
+            if (debug) {
+                console.debug('Using Auth Code passed during redirection: ' + localStorage.token);
+            }
+            window.history.replaceState({}, document.title, url);
+        }
+        return localStorage.token;
+    }
 }
 
