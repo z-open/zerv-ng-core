@@ -1,14 +1,11 @@
 "use strict";
 
 (function () {
-  "use strict";
-
   angular.module('zerv.core', []);
 })();
 "use strict";
 
 (function () {
-  "use strict";
   /**
    * This provider handles the handshake to authenticate a user and maintain a secure web socket connection via tokens.
    * It also sets the login and logout url participating in the authentication.
@@ -29,7 +26,6 @@
    *
    *
    */
-
   angular.module('zerv.core') // convenient service returning sessionUser
   .factory('sessionUser', ["$auth", function ($auth) {
     return $auth.getSessionUser();
@@ -399,14 +395,12 @@
 "use strict";
 
 (function () {
-  "use strict";
   /** 
    * This service allows your application contact the websocket api.
    * 
    * It will ensure that the connection is available and user is authenticated before fetching data.
    * 
    */
-
   angular.module('zerv.core').provider('$socketio', socketioProvider);
 
   function socketioProvider() {

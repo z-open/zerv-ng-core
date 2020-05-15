@@ -39,7 +39,7 @@ var appFiles = [
 gulp.task('lib', function () {
     return gulp.src(appFiles)
         .pipe(iife({
-            useStrict: true,
+            useStrict: false,
             trimCode: true,
             prependSemicolon: false,
             bindThis: false,
