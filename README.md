@@ -38,20 +38,6 @@ bower install "git://github.com/z-open/angular-socketio#commit-ish
 ```
 Afterwards, the module to add to your angular application is named socketio-auth.
 
-## Example 
-```javascript
-```
-
-__Client side__:
-
-```javascript
-```
-__Server side__:
-```javascript
-```
-
-
-
 ## Contribute
 
 You are always welcome to open an issue or provide a pull-request!
@@ -72,7 +58,7 @@ If you have found a bug or if you have a feature request, please report them at 
 
 ## Author
 
-[z-open]
+Zimit
 
 ## License
 
