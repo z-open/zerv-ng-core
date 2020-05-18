@@ -30,10 +30,7 @@
     "karma-babel-preprocessor": "8.0.1",
     "karma-chrome-launcher": "3.1.0",
     "karma-jasmine": "3.0.1",
-    "karma-jshint": "0.1.0",
-    "socket.io": "2.3.0",
-    "socket.io-client": "2.3.0",
-    "socketio-auth": "git://github.com/z-open/socketio-auth.git"
+    "karma-jshint": "0.1.0"
   },
   "scripts": {
     "test": "./node_modules/karma/bin/karma start"
