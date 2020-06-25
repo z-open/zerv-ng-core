@@ -185,7 +185,8 @@
             graceTimeout = void 0; // establish connection without passing the token (so that it is not visible in the log)
 
         socket = io.connect({
-          'forceNew': true
+          'forceNew': true,
+          transports: ['websocket']
         });
         socket.on('connect', onConnect).on('authenticated', onAuthenticated).on('unauthorized', onUnauthorized).on('logged_out', onLogOut).on('disconnect', onDisconnect); // TODO: this followowing event is still used.???....
 

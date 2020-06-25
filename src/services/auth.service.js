@@ -176,6 +176,7 @@ function authProvider() {
             // establish connection without passing the token (so that it is not visible in the log)
             socket = io.connect({
                 'forceNew': true,
+                transports: ['websocket']
             });
 
             socket
