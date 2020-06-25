@@ -28,7 +28,7 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, longPolling, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
 
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 
@@ -69,6 +69,11 @@ function authProvider() {
 
     this.setReconnectionMaxTimeInSecs = function(value) {
         reconnectionMaxTime = value * 1000;
+        return this;
+    };
+
+    this.enableLongPolling = function(value) {
+        longPolling = value === true;
         return this;
     };
 
@@ -174,10 +179,15 @@ function authProvider() {
             }
             let tokenRequestTimeout, graceTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
-            socket = io.connect({
-                'forceNew': true,
-                transports: ['websocket']
-            });
+            const connectOptions = {
+                'forceNew': true
+            };
+            // When using long polling the load balancer must be set to you sticky session to establish the socket connection
+            // io client would initiate first the connection with long polling then upgrade to websocket.
+            if (longPolling !== true) {
+                connectOptions.transports = ['websocket'];
+            }
+            socket = io.connect(connectOptions);
 
             socket
                 .on('connect', onConnect)
@@ -201,12 +211,20 @@ function authProvider() {
                 socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin}); // send the jwt
             }
 
-            function onDisconnect() {
+            function onDisconnect(reason) {
+                // Reasons:
+                // - "ping timeout"    - network issue - define in socketio at 20secs
+                // - "transport close" - server closed the socket  (logout will not have time to trigger onDisconnect)
                 if (debug) {
-                    console.debug('Session disconnected');
+                    console.debug('Session disconnected - ' + reason);
                 }
                 setConnectionStatus(false);
                 $rootScope.$broadcast('user_disconnected');
+                // attemp to reconnect right away only once.
+                // reconnecting on disconnection on a poor connection can drain the battery and increase server activity.
+                // However, a strategy to reconnect periodically should be implemented, ex every 5 mins.
+                // otherwise application will not receive any notification.
+                reconnect();
             }
 
             function onAuthenticated(refreshToken) {

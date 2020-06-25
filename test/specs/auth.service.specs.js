@@ -1,15 +1,17 @@
 
 describe('Unit testing for auth,', function () {
-    var mock, $auth, socket, sessionUser;
-    var $q, $timeout, $rootScope;
+    let $auth, socket, sessionUser;
+    let $q, $timeout, $rootScope;
+    let authProvider;
 
 
     // user in token
-    var refreshTokenUser = { display: 'test1' };
-    var refreshedToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ";
+    let refreshTokenUser = { display: 'test1' };
+    let refreshedToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ";
 
 
     beforeEach(module('zerv.core',function($authProvider){
+        authProvider = $authProvider;
         $authProvider.setDebug(true);
     }));
 
@@ -45,12 +47,26 @@ describe('Unit testing for auth,', function () {
                 expect(sessionUser.display).toEqual(refreshTokenUser.display);
                 done();
             });
-
             $rootScope.$apply();
             // fake server responding to the socket
             socket.emit("connect");
             socket.emit("authenticated", refreshedToken);
             $timeout.flush();
+        });
+
+        it('should connect using websocket as default transport', function (done) {
+            localStorage.token = "vvvv";
+            $auth.connect();
+            expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true, transports: [ 'websocket' ] });
+            done();
+        });
+
+        it('should connect using long polling as a preference to initiate socket', function (done) {
+            localStorage.token = "vvvv";
+            authProvider.enableLongPolling(true);
+            $auth.connect();
+            expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true });
+            done();
         });
 
         it('should not receive the connect at all and timeout', function (done) {
@@ -123,14 +139,12 @@ describe('Unit testing for auth,', function () {
     ////////////// HELPERS ///////////////////
     function mockIo() {
         window.io = {
-            connect: function () {
-                return socket;
-            }
+            connect: jasmine.createSpy('ioConnect').and.callFake(() => socket)
         };
     }
     
     function mockSocket() {
-        var socketListeners = {};
+        const socketListeners = {};
         socket = {
             emit: null,
             on: function (event, fn) {
