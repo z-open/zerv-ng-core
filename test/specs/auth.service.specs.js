@@ -8,7 +8,7 @@ describe('Unit testing for auth,', function () {
     var refreshTokenUser = { display: 'test1' };
     var refreshedToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ";
 
-
+    
     beforeEach(module('zerv.core',function($authProvider){
         $authProvider.setDebug(true);
     }));
@@ -117,6 +117,54 @@ describe('Unit testing for auth,', function () {
             socket.emit("connect");
             socket.emit("authenticated", refreshedToken);
             $timeout.flush();
+        });
+    });
+
+    describe('setInactiveSessionTimeoutInMins', () => {
+        beforeEach(() => {
+            jasmine.clock().install();
+            jasmine.clock().mockDate();
+        });
+    
+        afterEach(() => {
+            jasmine.clock().uninstall();
+        });
+
+        it('should set to logout after time of inactivity', (done) => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(1);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 30*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 30*1000);
+            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            done();
+        });
+
+        it('should reset to logout after a different time of inactivity', (done) => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(1);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 30*1000);
+            $auth.setInactiveSessionTimeoutInMins(1.25);
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 30*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 45*1000);
+            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            done();
         });
 
     });

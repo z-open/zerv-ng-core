@@ -82,8 +82,6 @@ function authProvider() {
     this.$get = function($rootScope, $location, $timeout, $q, $window) {
         let socket;
 
-        userInactivityMonitor.onTimeout = () => logout('inactive_session_timeout');
-
         const sessionUser = {
             connected: false,
             initialConnection: null,
@@ -105,6 +103,8 @@ function authProvider() {
             redirect,
             setInactiveSessionTimeoutInMins
         };
+
+        userInactivityMonitor.onTimeout = () => service.logout('inactive_session_timeout');
 
         return service;
 
@@ -392,8 +392,7 @@ function authProvider() {
             reset: () => {
                 localStorage.lastActivity = Date.now();
                 window.clearTimeout(monitor.timeoutId);
-                timeoutId = null;
-                console.debug('User active');
+                debug && console.debug('User active');
                 monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
             },
             setTimeoutInMins: (value) => {
@@ -410,9 +409,7 @@ function authProvider() {
                 } else {
                     // still need to wait, user was active in another tab
                     // This tab must take in consideration the last activity
-                    if (debug) {
-                        console.debug(`User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
-                    }
+                    debug && console.debug(`User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
                     monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);  
                 }
             }
