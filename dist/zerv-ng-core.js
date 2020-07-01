@@ -92,11 +92,6 @@
 
     this.$get = ["$rootScope", "$location", "$timeout", "$q", "$window", function ($rootScope, $location, $timeout, $q, $window) {
       var socket = void 0;
-
-      userInactivityMonitor.onTimeout = function () {
-        return logout('inactive_session_timeout');
-      };
-
       var sessionUser = {
         connected: false,
         initialConnection: null,
@@ -117,6 +112,11 @@
         redirect: redirect,
         setInactiveSessionTimeoutInMins: setInactiveSessionTimeoutInMins
       };
+
+      userInactivityMonitor.onTimeout = function () {
+        return service.logout('inactive_session_timeout');
+      };
+
       return service; // /////////////////
 
       function setInactiveSessionTimeoutInMins(value) {
@@ -415,11 +415,19 @@
         reset: function reset() {
           localStorage.lastActivity = Date.now();
           window.clearTimeout(monitor.timeoutId);
-          timeoutId = null;
-          console.debug('User active');
+          debug && console.debug('User active');
           monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
         },
         setTimeoutInMins: function setTimeoutInMins(value) {
+          if (!_.isInteger(value)) {
+            value = parseInt(value);
+
+            if (isNaN(value)) {
+              // let's keep using the current valid value (most likely the default one)
+              return;
+            }
+          }
+
           monitor.timeoutInMins = value;
 
           if (monitor.started) {
@@ -435,10 +443,7 @@
           } else {
             // still need to wait, user was active in another tab
             // This tab must take in consideration the last activity
-            if (debug) {
-              console.debug("User was active in another tab, wait " + timeBeforeTimeout / 1000 + " secs more before timing out");
-            }
-
+            debug && console.debug("User was active in another tab, wait " + timeBeforeTimeout / 1000 + " secs more before timing out");
             monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);
           }
         }

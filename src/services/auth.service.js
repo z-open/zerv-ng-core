@@ -396,6 +396,13 @@ function authProvider() {
                 monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
             },
             setTimeoutInMins: (value) => {
+                if (!_.isInteger(value)) {
+                    value = parseInt(value);
+                    if (isNaN(value)) {
+                        // let's keep using the current valid value (most likely the default one)
+                        return;
+                    }
+                }
                 monitor.timeoutInMins = value;
                 if (monitor.started) {
                     monitor.reset();
