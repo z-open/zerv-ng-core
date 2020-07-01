@@ -1,10 +1,12 @@
 
 describe('Unit testing for auth,', function () {
-    let $auth, socket, sessionUser;
-    let $q, $timeout, $rootScope;
+    let $auth;
+    let socket;
+    let sessionUser;
+    let $q;
+    let $timeout;
+    let $rootScope;
     let authProvider;
-
-
     // user in token
     let refreshTokenUser = { display: 'test1' };
     let refreshedToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ";
@@ -54,19 +56,17 @@ describe('Unit testing for auth,', function () {
             $timeout.flush();
         });
 
-        it('should connect using websocket as default transport', function (done) {
+        it('should connect using websocket as default transport', () => {
             localStorage.token = "vvvv";
             $auth.connect();
             expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true, transports: [ 'websocket' ] });
-            done();
         });
 
-        it('should connect using long polling as a preference to initiate socket', function (done) {
+        it('should connect using long polling as a preference to initiate socket', () => {
             localStorage.token = "vvvv";
             authProvider.enableLongPolling(true);
             $auth.connect();
             expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true });
-            done();
         });
 
         it('should not receive the connect at all and timeout', function (done) {

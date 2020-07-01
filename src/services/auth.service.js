@@ -28,7 +28,8 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, longPolling, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
+    let longPolling = false;
 
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 

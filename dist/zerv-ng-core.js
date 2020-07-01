@@ -36,11 +36,11 @@
         logoutUrl = void 0,
         debug = void 0,
         reconnectionMaxTime = 15,
-        longPolling = void 0,
         onSessionExpirationCallback = void 0,
         onConnectCallback = void 0,
         onDisconnectCallback = void 0,
         onUnauthorizedCallback = void 0;
+    var longPolling = false;
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 
     this.setDebug = function (value) {
