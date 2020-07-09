@@ -397,27 +397,32 @@
       var maxInactiveTimeout = 7 * 24 * 60;
       var monitor = {
         timeoutId: null,
-        timeoutInMins: 60,
+        timeoutInMins: 0,
         started: false,
         onTimeout: null,
         start: function start() {
-          if (monitor.started || monitor.timeoutInMins === 0) {
+          if (monitor.started) {
             return;
           }
 
           monitor.started = true;
-          document.addEventListener("mousemove", monitor.reset, false);
-          document.addEventListener("mousedown", monitor.reset, false);
-          document.addEventListener("keypress", monitor.reset, false);
-          document.addEventListener("touchmove", monitor.reset, false);
-          localStorage.lastActivity = Date.now();
-          monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
+          document.addEventListener("mousemove", monitor.notifyUserActivity, false);
+          document.addEventListener("mousedown", monitor.notifyUserActivity, false);
+          document.addEventListener("keypress", monitor.notifyUserActivity, false);
+          document.addEventListener("touchmove", monitor.notifyUserActivity, false);
+          monitor.reset();
+        },
+        notifyUserActivity: function notifyUserActivity() {
+          debug && console.debug('User active');
+          monitor.reset();
         },
         reset: function reset() {
           localStorage.lastActivity = Date.now();
           window.clearTimeout(monitor.timeoutId);
-          debug && console.debug('User active');
-          monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
+
+          if (monitor.timeoutInMins !== 0) {
+            monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
+          }
         },
         setTimeoutInMins: function setTimeoutInMins(value) {
           if (!_.isInteger(value)) {
@@ -429,10 +434,11 @@
             }
           }
 
-          if (value < 0 || value > maxInactiveTimeout) {
+          if (value > maxInactiveTimeout) {
             monitor.timeoutInMins = maxInactiveTimeout;
           } else {
-            monitor.timeoutInMins = value;
+            // value cannot be less than 1 minute otherwise it is disabled to prevent users from being kicked out too early.
+            monitor.timeoutInMins = value < 1 ? 0 : value;
           }
 
           if (monitor.started) {

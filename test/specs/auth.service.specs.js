@@ -171,16 +171,27 @@ describe('Unit testing for auth,', function () {
             socket.emit("connect");
             socket.emit("authenticated", refreshedToken);
             $timeout.flush();
-            jasmine.clock().tick( 6 * 24 * 60 * 60*1000);
+            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
             expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 24 * 60 * 60*1000);
-            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
         });
 
         it('should never logout when settings is set to 0', () => {
             spyOn($auth, 'logout');
             localStorage.token = "vvvv";
             $auth.setInactiveSessionTimeoutInMins(0);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+        });
+
+        it('should never logout when settings is set between 0 and 1', () => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(0.5);
             $auth.connect();
             $rootScope.$apply();
             socket.emit("connect");
