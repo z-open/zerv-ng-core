@@ -372,13 +372,14 @@ function authProvider() {
     };
 
     function createInactiveSessionMonitoring() {
+        const maxInactiveTimeout = 7 * 24 * 60;
         const monitor = {
             timeoutId: null,
             timeoutInMins: 60,
             started: false,
             onTimeout: null,
             start: () => {
-                if (monitor.started) {
+                if (monitor.started || monitor.timeoutInMins === 0) {
                     return;
                 }
                 monitor.started = true;
@@ -403,7 +404,11 @@ function authProvider() {
                         return;
                     }
                 }
-                monitor.timeoutInMins = value;
+                if (value < 0 || value > maxInactiveTimeout) {
+                    monitor.timeoutInMins = maxInactiveTimeout;
+                } else {
+                    monitor.timeoutInMins = value;
+                }
                 if (monitor.started) {
                     monitor.reset();
                 }

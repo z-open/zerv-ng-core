@@ -394,13 +394,14 @@
     }];
 
     function createInactiveSessionMonitoring() {
+      var maxInactiveTimeout = 7 * 24 * 60;
       var monitor = {
         timeoutId: null,
         timeoutInMins: 60,
         started: false,
         onTimeout: null,
         start: function start() {
-          if (monitor.started) {
+          if (monitor.started || monitor.timeoutInMins === 0) {
             return;
           }
 
@@ -428,7 +429,11 @@
             }
           }
 
-          monitor.timeoutInMins = value;
+          if (value < 0 || value > maxInactiveTimeout) {
+            monitor.timeoutInMins = maxInactiveTimeout;
+          } else {
+            monitor.timeoutInMins = value;
+          }
 
           if (monitor.started) {
             monitor.reset();

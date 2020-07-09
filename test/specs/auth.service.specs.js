@@ -147,6 +147,49 @@ describe('Unit testing for auth,', function () {
             done();
         });
 
+        it('should set to logout to 7 days if setting is too high', () => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(10000000);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            jasmine.clock().tick( 6 * 24 * 60 * 60*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 24 * 60 * 60*1000);
+            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+        });
+
+        it('should set to logout to 7 days if setting is negative', () => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(-100);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            jasmine.clock().tick( 6 * 24 * 60 * 60*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+            jasmine.clock().tick( 24 * 60 * 60*1000);
+            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+        });
+
+        it('should never logout when settings is set to 0', () => {
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
+            $auth.setInactiveSessionTimeoutInMins(0);
+            $auth.connect();
+            $rootScope.$apply();
+            socket.emit("connect");
+            socket.emit("authenticated", refreshedToken);
+            $timeout.flush();
+            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
+            expect($auth.logout).not.toHaveBeenCalled();
+        });
+
         it('should reset to logout after a different time of inactivity', (done) => {
             spyOn($auth, 'logout');
             localStorage.token = "vvvv";
