@@ -1,5 +1,5 @@
 
-describe('Unit testing for auth,', function () {
+describe('Unit testing for auth,', () => {
     let $auth;
     let socket;
     let sessionUser;
@@ -17,11 +17,9 @@ describe('Unit testing for auth,', function () {
         $authProvider.setDebug(true);
     }));
 
-    beforeEach(function () {
-      
+    beforeEach(() => {
         mockSocket();
         mockIo();
-        
 
         inject(function ($injector, _$rootScope_, _$q_, _$timeout_) {
             $auth = $injector.get('$auth');
@@ -36,15 +34,15 @@ describe('Unit testing for auth,', function () {
     
     
 
-    afterEach(function () {
+    afterEach(() => {
         window.localStorage.token = null;
     });
 
-    describe('Connect', function () {
+    describe('Connect', () => {
 
-        it('should connect and store the new token and user', function (done) {
+        it('should connect and store the new token and user', (done) => {
             localStorage.token = "vvvv";
-            $auth.connect().finally(function () {
+            $auth.connect().finally(() => {
                 expect(localStorage.token).toEqual(refreshedToken);
                 expect(sessionUser.display).toEqual(refreshTokenUser.display);
                 done();
@@ -69,9 +67,9 @@ describe('Unit testing for auth,', function () {
             expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true });
         });
 
-        it('should not receive the connect at all and timeout', function (done) {
+        it('should not receive the connect at all and timeout', (done) => {
             localStorage.token = "vvvv";
-            $auth.connect().catch(function (err) {
+            $auth.connect().catch((err) => {
                 expect(err).toEqual('USER_NOT_CONNECTED');
                 done();
             });
@@ -79,9 +77,9 @@ describe('Unit testing for auth,', function () {
             $timeout.flush();
         });
 
-        it('should connect but timeout because not receiving the authenticated acknowledgement', function (done) {
+        it('should connect but timeout because not receiving the authenticated acknowledgement', (done) => {
             localStorage.token = "vvvv";
-            $auth.connect().catch(function (err) {
+            $auth.connect().catch((err) => {
                 expect(err).toEqual('USER_NOT_CONNECTED');
                 done();
             });
@@ -92,10 +90,10 @@ describe('Unit testing for auth,', function () {
             $timeout.flush();
         });
 
-        it('should already be connected if it connected before', function (done) {
+        it('should already be connected if it connected before', (done) => {
             localStorage.token = "vvvv";
-            $auth.connect().finally(function () {
-                $auth.connect().finally(function () {
+            $auth.connect().finally(() => {
+                $auth.connect().finally(() => {
                     done();
                 });
             });
@@ -105,20 +103,18 @@ describe('Unit testing for auth,', function () {
             socket.emit("authenticated", refreshedToken);
             $timeout.flush();
         });
-
-
     });
 
-    describe('logout', function () {
+    describe('logout', () => {
 
-        it('should not call logout without connection', function () {
+        it('should not call logout without connection', () => {
             $auth.logout();
             expect(socket.emit).not.toHaveBeenCalled();
         });
 
-        it('should call emit logout then remove the token in local storage and redirect', function (done) {
+        it('should call emit logout then remove the token in local storage and redirect', (done) => {
             localStorage.token = "vvvv";
-            $auth.connect().finally(function () {
+            $auth.connect().finally(() => {
                  $auth.logout();
                 // //fake server responding..
                 socket.emit('logged_out');
@@ -136,107 +132,143 @@ describe('Unit testing for auth,', function () {
         });
     });
 
-    describe('setInactiveSessionTimeoutInMins', () => {
+    describe('User inactivity monitor', () => {
+        
         beforeEach(() => {
             jasmine.clock().install();
             jasmine.clock().mockDate();
+            spyOn($auth, 'logout');
+            localStorage.token = "vvvv";
         });
     
         afterEach(() => {
             jasmine.clock().uninstall();
         });
 
-        it('should set to logout after time of inactivity', (done) => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(1);
+        describe('setInactiveSessionTimeoutInMins', () => {
+
+            it('should set to logout after time of inactivity', () => {
+                $auth.setInactiveSessionTimeoutInMins(1);
+                connectSession();
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 30*1000);
+                expect($auth.getRemainingInactiveTime()).toBe(30000);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 30*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should set to logout to 7 days if setting is too high', () => {
+                $auth.setInactiveSessionTimeoutInMins(10000000);
+                connectSession();
+                jasmine.clock().tick( 6 * 24 * 60 * 60*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 24 * 60 * 60*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should set to logout to 7 days if setting is negative', () => {
+                $auth.setInactiveSessionTimeoutInMins(-100);
+                connectSession();
+                jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+            });
+
+            it('should never logout when settings is set to 0', () => {
+                $auth.setInactiveSessionTimeoutInMins(0);
+                connectSession();
+                jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+            });
+
+            it('should never logout when settings is set between 0 and 1', () => {
+                $auth.setInactiveSessionTimeoutInMins(0.5);
+                connectSession();
+                jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+            });
+
+            it('should reset to logout after a different time of inactivity', (done) => {
+                $auth.setInactiveSessionTimeoutInMins(1);
+                connectSession();
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 30*1000);
+                $auth.setInactiveSessionTimeoutInMins(1.25);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 30*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 45*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+                done();
+            });
+        });
+
+        describe('reset', () => {
+
+            beforeEach(() => {
+                $auth.setInactiveSessionTimeoutInMins(1);
+                connectSession();
+                jasmine.clock().tick(30*1000);
+            });
+
+            it('should occur on mousemove', () => {
+                document.dispatchEvent(new Event('mousemove'));
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                jasmine.clock().tick( 30*1000);
+                expect($auth.logout).not.toHaveBeenCalled();
+                jasmine.clock().tick( 30*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should occur on mousedown', () => {
+                document.dispatchEvent(new Event('mousedown'));
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                jasmine.clock().tick( 60*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should occur on keypress', () => {
+                document.dispatchEvent(new Event('keypress'));
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                jasmine.clock().tick( 60*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should occur on touchmove', () => {
+                document.dispatchEvent(new Event('touchmove'));
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                jasmine.clock().tick( 60*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+
+            it('should occur maximum every second', () => {
+                document.dispatchEvent(new Event('mousemove'));
+                jasmine.clock().tick(500);
+                document.dispatchEvent(new Event('mousemove'));
+                // the timeout was not resetted despite the mousemove.
+                expect($auth.getRemainingInactiveTime()).toBe(59500);
+                jasmine.clock().tick(300);
+                document.dispatchEvent(new Event('mousemove'));
+                // the timeout was still not resetted despite the mousemove.
+                expect($auth.getRemainingInactiveTime()).toBe(59200);
+                jasmine.clock().tick(200);
+                // 1s passed by since it was resetted, this new event will reset the timeout
+                document.dispatchEvent(new Event('mousemove'));
+                expect($auth.getRemainingInactiveTime()).toBe(60000);
+                jasmine.clock().tick(60*1000);
+                expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
+            });
+        });
+
+
+        function connectSession() {
             $auth.connect();
             $rootScope.$apply();
             socket.emit("connect");
             socket.emit("authenticated", refreshedToken);
             $timeout.flush();
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 30*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 30*1000);
-            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
-            done();
-        });
-
-        it('should set to logout to 7 days if setting is too high', () => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(10000000);
-            $auth.connect();
-            $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
-            $timeout.flush();
-            jasmine.clock().tick( 6 * 24 * 60 * 60*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 24 * 60 * 60*1000);
-            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
-        });
-
-        it('should set to logout to 7 days if setting is negative', () => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(-100);
-            $auth.connect();
-            $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
-            $timeout.flush();
-            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-        });
-
-        it('should never logout when settings is set to 0', () => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(0);
-            $auth.connect();
-            $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
-            $timeout.flush();
-            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-        });
-
-        it('should never logout when settings is set between 0 and 1', () => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(0.5);
-            $auth.connect();
-            $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
-            $timeout.flush();
-            jasmine.clock().tick( 7 * 24 * 60 * 60*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-        });
-
-        it('should reset to logout after a different time of inactivity', (done) => {
-            spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
-            $auth.setInactiveSessionTimeoutInMins(1);
-            $auth.connect();
-            $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
-            $timeout.flush();
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 30*1000);
-            $auth.setInactiveSessionTimeoutInMins(1.25);
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 30*1000);
-            expect($auth.logout).not.toHaveBeenCalled();
-            jasmine.clock().tick( 45*1000);
-            expect($auth.logout).toHaveBeenCalledWith('inactive_session_timeout');
-            done();
-        });
-
+        }        
     });
     ////////////// HELPERS ///////////////////
     function mockIo() {
@@ -248,7 +280,7 @@ describe('Unit testing for auth,', function () {
     function mockSocket() {
         const socketListeners = {};
         socket = {
-            emit: null,
+            emit: jasmine.createSpy('socketEmit'),
             on: function (event, fn) {
                // console.log("on: " + event);
                 socketListeners[event] = fn;
@@ -257,7 +289,7 @@ describe('Unit testing for auth,', function () {
             connect: () => _.noop
         }
 
-        spyOn(socket, 'emit').and.callFake(
+        socket.emit.and.callFake(
             function (event, data, callback) {
                 console.log("emiting " + event);
                 if (socketListeners[event]) {

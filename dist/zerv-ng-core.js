@@ -116,7 +116,8 @@
         logout: logout,
         getSessionUser: getSessionUser,
         redirect: redirect,
-        setInactiveSessionTimeoutInMins: setInactiveSessionTimeoutInMins
+        setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
+        getRemainingInactiveTime: userInactivityMonitor.getRemainingTime
       };
 
       userInactivityMonitor.onTimeout = function () {
@@ -124,12 +125,6 @@
       };
 
       return service; // /////////////////
-
-      function setInactiveSessionTimeoutInMins(value) {
-        userInactivityMonitor.setTimeoutInMins(value);
-      }
-
-      ;
 
       function getSessionUser() {
         // the object will have the user information when the connection is established. Otherwise its connection property will be false;
@@ -420,41 +415,34 @@
         timeoutId: null,
         timeoutInMins: 0,
         started: false,
-        onTimeout: null,
-        start: function start() {
-          if (monitor.started) {
-            return;
-          }
+        onTimeout: null
+      }; // as soon as there is a user activity the timeout will be resetted but not more than once every sec.
 
+      var notifyUserActivity = _.throttle(function () {
+        debug && console.debug('User active');
+        resetMonitor();
+      }, 1000, {
+        leading: true,
+        trailing: false
+      });
+
+      monitor.start = function () {
+        if (!monitor.started) {
           monitor.started = true;
-          document.addEventListener("mousemove", monitor.notifyUserActivity, false);
-          document.addEventListener("mousedown", monitor.notifyUserActivity, false);
-          document.addEventListener("keypress", monitor.notifyUserActivity, false);
-          document.addEventListener("touchmove", monitor.notifyUserActivity, false);
-          monitor.reset();
-        },
-        notifyUserActivity: function notifyUserActivity() {
-          debug && console.debug('User active');
-          monitor.reset();
-        },
-        reset: function reset() {
-          localStorage.lastActivity = Date.now();
-          window.clearTimeout(monitor.timeoutId);
+          document.addEventListener("mousemove", notifyUserActivity, false);
+          document.addEventListener("mousedown", notifyUserActivity, false);
+          document.addEventListener("keypress", notifyUserActivity, false);
+          document.addEventListener("touchmove", notifyUserActivity, false);
+          resetMonitor();
+        }
+      };
 
-          if (monitor.timeoutInMins !== 0) {
-            monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
-          }
-        },
-        setTimeoutInMins: function setTimeoutInMins(value) {
-          if (!_.isInteger(value)) {
-            value = parseInt(value);
+      monitor.setTimeoutInMins = function (value) {
+        if (!_.isInteger(value)) {
+          value = parseInt(value);
+        }
 
-            if (isNaN(value)) {
-              // let's keep using the current valid value (most likely the default one)
-              return;
-            }
-          }
-
+        if (!isNaN(value)) {
           if (value > maxInactiveTimeout) {
             monitor.timeoutInMins = maxInactiveTimeout;
           } else {
@@ -463,23 +451,42 @@
           }
 
           if (monitor.started) {
-            monitor.reset();
-          }
-        },
-        _timeout: function _timeout() {
-          var inactiveTime = Date.now() - localStorage.lastActivity;
-          var timeBeforeTimeout = 60000 * monitor.timeoutInMins - inactiveTime;
-
-          if (timeBeforeTimeout <= 0) {
-            monitor.onTimeout();
-          } else {
-            // still need to wait, user was active in another tab
-            // This tab must take in consideration the last activity
-            debug && console.debug("User was active in another tab, wait " + timeBeforeTimeout / 1000 + " secs more before timing out");
-            monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);
+            resetMonitor();
           }
         }
       };
+
+      monitor.getRemainingTime = function () {
+        var inactiveTime = Date.now() - localStorage.lastActivity;
+        return 60000 * monitor.timeoutInMins - inactiveTime;
+      };
+
+      function resetMonitor() {
+        localStorage.lastActivity = Date.now();
+        window.clearTimeout(monitor.timeoutId);
+
+        if (monitor.timeoutInMins !== 0) {
+          debug && console.debug('User inactivity timeout resetted');
+          monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
+        }
+      }
+
+      ;
+
+      function setMonitorTimeout() {
+        var timeBeforeTimeout = monitor.getRemainingTime();
+
+        if (timeBeforeTimeout <= 0) {
+          monitor.onTimeout();
+        } else {
+          // still need to wait, user was active in another tab
+          // This tab must take in consideration the last activity
+          debug && console.debug("User was active in another tab, wait " + timeBeforeTimeout / 1000 + " secs more before timing out");
+          monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);
+        }
+      }
+
+      ;
       return monitor;
     }
 

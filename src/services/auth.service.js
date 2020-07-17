@@ -107,7 +107,8 @@ function authProvider() {
             logout,
             getSessionUser,
             redirect,
-            setInactiveSessionTimeoutInMins
+            setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
+            getRemainingInactiveTime: userInactivityMonitor.getRemainingTime
         };
 
         userInactivityMonitor.onTimeout = () => service.logout('inactive_session_timeout');
@@ -116,10 +117,6 @@ function authProvider() {
 
 
         // /////////////////
-
-        function setInactiveSessionTimeoutInMins(value) {
-            userInactivityMonitor.setTimeoutInMins(value);
-        };
 
         function getSessionUser() {
             // the object will have the user information when the connection is established. Otherwise its connection property will be false;
@@ -393,41 +390,40 @@ function authProvider() {
 
     function createInactiveSessionMonitoring() {
         const maxInactiveTimeout = 7 * 24 * 60;
+        
         const monitor = {
             timeoutId: null,
             timeoutInMins: 0,
             started: false,
-            onTimeout: null,
-            start: () => {
-                if (monitor.started) {
-                    return;
-                }
-                monitor.started = true;
-                document.addEventListener("mousemove", monitor.notifyUserActivity, false);
-                document.addEventListener("mousedown", monitor.notifyUserActivity, false);
-                document.addEventListener("keypress", monitor.notifyUserActivity, false);
-                document.addEventListener("touchmove", monitor.notifyUserActivity, false);     
-                monitor.reset();
-            },
-            notifyUserActivity: () => {
+            onTimeout: null
+        };
+
+        // as soon as there is a user activity the timeout will be resetted but not more than once every sec.
+        const notifyUserActivity = _.throttle(
+            () => {
                 debug && console.debug('User active');
-                monitor.reset();
+                resetMonitor();
             },
-            reset: () => {
-                localStorage.lastActivity = Date.now();
-                window.clearTimeout(monitor.timeoutId);
-                if (monitor.timeoutInMins !== 0) { 
-                    monitor.timeoutId = window.setTimeout(monitor._timeout, monitor.timeoutInMins * 60000);
-                }
-            },
-            setTimeoutInMins: (value) => {
-                if (!_.isInteger(value)) {
-                    value = parseInt(value);
-                    if (isNaN(value)) {
-                        // let's keep using the current valid value (most likely the default one)
-                        return;
-                    }
-                }
+            1000,
+            {leading: true, trailing: false}
+        );
+
+        monitor.start = () => {
+            if (!monitor.started) {
+                monitor.started = true;
+                document.addEventListener("mousemove", notifyUserActivity, false);
+                document.addEventListener("mousedown", notifyUserActivity, false);
+                document.addEventListener("keypress", notifyUserActivity, false);
+                document.addEventListener("touchmove", notifyUserActivity, false);     
+                resetMonitor();
+            }
+        };
+
+        monitor.setTimeoutInMins = (value) => {
+            if (!_.isInteger(value)) {
+                value = parseInt(value);
+            }
+            if (!isNaN(value)) {
                 if (value > maxInactiveTimeout) {
                     monitor.timeoutInMins = maxInactiveTimeout;
                 } else {
@@ -435,26 +431,38 @@ function authProvider() {
                     monitor.timeoutInMins = value < 1 ? 0 : value;
                 }
                 if (monitor.started) {
-                    monitor.reset();
+                    resetMonitor();
                 }
-            },
-            _timeout: () => {
-                const inactiveTime = Date.now() - localStorage.lastActivity;
-                const timeBeforeTimeout = (60000 * monitor.timeoutInMins) - inactiveTime;
-                if (timeBeforeTimeout <= 0) {
-                    monitor.onTimeout();
-                } else {
-                    // still need to wait, user was active in another tab
-                    // This tab must take in consideration the last activity
-                    debug && console.debug(`User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
-                    monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);  
-                }
+            }
+        };
+
+        monitor.getRemainingTime = () => {
+            const inactiveTime = Date.now() - localStorage.lastActivity;
+            return (60000 * monitor.timeoutInMins) - inactiveTime;
+        };
+
+        function resetMonitor() {
+            localStorage.lastActivity = Date.now();
+            window.clearTimeout(monitor.timeoutId);
+            if (monitor.timeoutInMins !== 0) {
+                debug && console.debug('User inactivity timeout resetted');
+                monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
+            }
+        };
+        
+        function setMonitorTimeout() {
+            const timeBeforeTimeout = monitor.getRemainingTime();
+            if (timeBeforeTimeout <= 0) {
+                monitor.onTimeout();
+            } else {
+                // still need to wait, user was active in another tab
+                // This tab must take in consideration the last activity
+                debug && console.debug(`User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
+                monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);  
             }
         };
         return monitor;
     }
-
-    
 
     function retrieveAuthCodeFromUrlOrTokenFromStorage() {
         // token will alsway come last in the url if any.
@@ -471,4 +479,3 @@ function authProvider() {
         return localStorage.token;
     }
 }
-
