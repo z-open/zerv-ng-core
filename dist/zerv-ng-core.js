@@ -32,6 +32,8 @@
   }]).provider('$auth', authProvider);
 
   function authProvider() {
+    var _this = this;
+
     var loginUrl = void 0,
         logoutUrl = void 0,
         debug = void 0,
@@ -42,6 +44,12 @@
         onUnauthorizedCallback = void 0;
     var longPolling = false;
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
+    var userInactivityMonitor = createInactiveSessionMonitoring();
+
+    this.setDefaultInactiveSessionTimeoutInMins = function (value) {
+      userInactivityMonitor.setTimeoutInMins(value);
+      return _this;
+    };
 
     this.setDebug = function (value) {
       debug = value;
@@ -107,8 +115,15 @@
         connect: connect,
         logout: logout,
         getSessionUser: getSessionUser,
-        redirect: redirect
+        redirect: redirect,
+        setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
+        getRemainingInactiveTime: userInactivityMonitor.getRemainingTime
       };
+
+      userInactivityMonitor.onTimeout = function () {
+        return service.logout('inactive_session_timeout');
+      };
+
       return service; // /////////////////
 
       function getSessionUser() {
@@ -235,7 +250,8 @@
         }
 
         function onAuthenticated(refreshToken) {
-          // the server confirmed that the token is valid...we are good to go
+          userInactivityMonitor.start(); // the server confirmed that the token is valid...we are good to go
+
           if (debug) {
             console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
           }
@@ -392,6 +408,87 @@
         service.redirect(url);
       }
     }];
+
+    function createInactiveSessionMonitoring() {
+      var maxInactiveTimeout = 7 * 24 * 60;
+      var monitor = {
+        timeoutId: null,
+        timeoutInMins: 0,
+        started: false,
+        onTimeout: null
+      }; // as soon as there is a user activity the timeout will be resetted but not more than once every sec.
+
+      var notifyUserActivity = _.throttle(function () {
+        debug && console.debug('User active');
+        resetMonitor();
+      }, 1000, {
+        leading: true,
+        trailing: false
+      });
+
+      monitor.start = function () {
+        if (!monitor.started) {
+          monitor.started = true;
+          document.addEventListener("mousemove", notifyUserActivity, false);
+          document.addEventListener("mousedown", notifyUserActivity, false);
+          document.addEventListener("keypress", notifyUserActivity, false);
+          document.addEventListener("touchmove", notifyUserActivity, false);
+          resetMonitor();
+        }
+      };
+
+      monitor.setTimeoutInMins = function (value) {
+        if (!_.isInteger(value)) {
+          value = parseInt(value);
+        }
+
+        if (!isNaN(value)) {
+          if (value > maxInactiveTimeout) {
+            monitor.timeoutInMins = maxInactiveTimeout;
+          } else {
+            // value cannot be less than 1 minute otherwise it is disabled to prevent users from being kicked out too early.
+            monitor.timeoutInMins = value < 1 ? 0 : value;
+          }
+
+          if (monitor.started) {
+            resetMonitor();
+          }
+        }
+      };
+
+      monitor.getRemainingTime = function () {
+        var inactiveTime = Date.now() - localStorage.lastActivity;
+        return 60000 * monitor.timeoutInMins - inactiveTime;
+      };
+
+      function resetMonitor() {
+        localStorage.lastActivity = Date.now();
+        window.clearTimeout(monitor.timeoutId);
+
+        if (monitor.timeoutInMins !== 0) {
+          debug && console.debug('User inactivity timeout resetted');
+          monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
+        }
+      }
+
+      ;
+
+      function setMonitorTimeout() {
+        var timeBeforeTimeout = monitor.getRemainingTime();
+
+        if (timeBeforeTimeout <= 0) {
+          monitor.onTimeout();
+        } else {
+          // still need to wait, user was active in another tab
+          // This tab must take in consideration the last activity
+          debug && console.debug("User was active in another tab, wait " + timeBeforeTimeout / 1000 + " secs more before timing out");
+          monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);
+        }
+      }
+
+      ;
+      return monitor;
+    }
 
     function retrieveAuthCodeFromUrlOrTokenFromStorage() {
       // token will alsway come last in the url if any.
