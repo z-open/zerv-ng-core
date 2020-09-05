@@ -10,7 +10,7 @@
   "dependencies": {
     "angular": "1.7.9",
     "lodash": "4.17.15",
-    "zjsonbin": "github:z-open/zjsonbin#2.0.3"
+    "zjsonbin": "github:z-open/zjsonbin#2.0.4"
   },
   "devDependencies": {
     "@babel/core": "7.7.7",
