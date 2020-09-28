@@ -9,7 +9,7 @@
   "version": "1.1.12",
   "dependencies": {
     "angular": "1.7.9",
-    "lodash": "4.17.15",
+    "lodash": "4.17.19",
     "zjsonbin": "github:z-open/zjsonbin#2.0.4"
   },
   "devDependencies": {
