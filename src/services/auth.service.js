@@ -30,6 +30,7 @@ angular
 function authProvider() {
     let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
     let longPolling = false;
+    let socketConnectionOptions;
 
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 
@@ -77,6 +78,11 @@ function authProvider() {
 
     this.setReconnectionMaxTimeInSecs = function(value) {
         reconnectionMaxTime = value * 1000;
+        return this;
+    };
+
+    this.setSocketConnectionOptions = function(obj) {
+        socketConnectionOptions = obj;
         return this;
     };
 
@@ -162,10 +168,6 @@ function authProvider() {
             if (sessionUser.connected) {
                 deferred.resolve(socket);
             }
-            // @TODO TO THINK ABOUT:, if the socket is connecting already, means that a connect was called already by another async call, so just wait for user_connected
-
-            // if the response does not come quick..let's give up so we don't get stuck waiting
-            // @TODO:other way is to watch for a connection error...
             let acceptableDelay;
             const off = $rootScope.$on('user_connected', function() {
                 off();
@@ -175,6 +177,8 @@ function authProvider() {
                 deferred.resolve(socket);
             });
 
+            // if the response does not come quick..let's give up so that users don't get stuck waiting
+            // and the process relying on the reconnect() does not get stuck undefinitely.
             acceptableDelay = $timeout(function() {
                 off();
                 deferred.reject('TIMEOUT');
@@ -192,9 +196,21 @@ function authProvider() {
             }
             let tokenRequestTimeout, graceTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
-            const connectOptions = {
-                'forceNew': true
-            };
+            // and keep the connection alive
+            const connectOptions = _.assign( socketConnectionOptions || {}, 
+                {
+                    'forceNew': true,
+                    // by default the socket will reconnect after any disconnection error (except if disconnect co
+                    // default value: https://socket.io/docs/client-api/#new-Manager-url-options
+
+                    // reconnectionAttempts	Infinity	number of reconnection attempts before giving up
+                    // reconnectionDelay	1000	how long to initially wait before attempting a new reconnection. Affected by +/- randomizationFactor, for example the default initial delay will be between 500 to 1500ms.
+                    // reconnectionDelayMax	5000	maximum amount of time to wait between reconnections. Each attempt increases the reconnection delay by 2x along with a randomization factor.
+                    // randomizationFactor	0.5	0 <= randomizationFactor <= 1
+                    // timeout	20000	connection timeout before a connect_error and connect_timeout events are emitted
+                    // autoConnect	true	by setting this false, you have to call manager.open whenever you decide it’s appropriate
+                }
+            );
             // When using long polling the load balancer must be set to you sticky session to establish the socket connection
             // io client would initiate first the connection with long polling then upgrade to websocket.
             if (longPolling !== true) {
@@ -209,16 +225,16 @@ function authProvider() {
                 .on('logged_out', onLogOut)
                 .on('disconnect', onDisconnect);
 
-            // TODO: this followowing event is still used.???....
             socket
-                .on('connect_error', function() {
-                    setConnectionStatus(false);
+                .on('connect_error', function(reason) {
+                    // issue during connection
+                    setConnectionStatus(false, reason);
                 });
 
             // ///////////////////////////////////////////
             function onConnect() {
                 // Pass the origin if any to handle multi session on a browser.
-                setConnectionStatus(false);
+                setConnectionStatus(false, 'Authenticating');
                 // the socket is connected, time to pass the auth code or current token to authenticate asap
                 // because if it expires, user will have to relog in
                 socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin}); // send the jwt
@@ -228,16 +244,16 @@ function authProvider() {
                 // Reasons:
                 // - "ping timeout"    - network issue - define in socketio at 20secs
                 // - "transport close" - server closed the socket  (logout will not have time to trigger onDisconnect)
-                if (debug) {
-                    console.debug('Session disconnected - ' + reason);
-                }
-                setConnectionStatus(false);
+                setConnectionStatus(false, reason);
                 $rootScope.$broadcast('user_disconnected');
-                // attemp to reconnect right away only once.
-                // reconnecting on disconnection on a poor connection can drain the battery and increase server activity.
-                // However, a strategy to reconnect periodically should be implemented, ex every 5 mins.
-                // otherwise application will not receive any notification.
-                reconnect();
+                // after the socket disconnect, socketio will reconnect the server automatically by default.
+                // EXCEPT if the backend sends a disconnect.
+                // Currently backend might send a disconnect
+                // - if the token is invalid (unauthorized) 
+                //   -> the onUnauthorized() function will be called as well
+                // - if the browser took too much time before requesting authentication (in socketio-jwt) 
+                //   -> Not handled yet -> futur solution is logout/ clear token
+                // 
             }
 
             function onAuthenticated(refreshToken) {
@@ -275,7 +291,7 @@ function authProvider() {
                 // token is no longer available.
                 delete localStorage.token;
                 delete localStorage.origin;
-                setConnectionStatus(false);
+                setConnectionStatus(false, 'logged out');
                 service.redirect(logoutUrl || loginUrl);
             }
 
@@ -284,7 +300,7 @@ function authProvider() {
                 if (debug) {
                     console.debug('unauthorized: ' + JSON.stringify(msg));
                 }
-                setConnectionStatus(false);
+                setConnectionStatus(false, 'unauthorized');
                 if (onUnauthorizedCallback) {
                     onUnauthorizedCallback(msg);
                 }
@@ -302,7 +318,10 @@ function authProvider() {
                 }
             }
 
-            function setConnectionStatus(connected) {
+            function setConnectionStatus(connected, reason) {
+                if (debug) {
+                    console.debug('Session Status: ' + (connected ? 'connected' : 'disconnected(' + reason + ')'));
+                }
                 if (sessionUser.connected !== connected) {
                     sessionUser.connected = connected;
                     if (connected && onConnectCallback) {
@@ -348,7 +367,14 @@ function authProvider() {
             function requestNewTokenBeforeExpiration(payload) {
                 clearNewTokenRequestTimeout();
                 const expectancy = payload.dur;
-
+                // if the network is lost just before the token is automatially refreshed
+                // but socketio reconnects before the token expired 
+                // a new token will be provided and session is maintained.
+                // To revise:
+                // ---------- 
+                // Currently, each reconnection will return a new token
+                // Later on, it might be better the backend returns a new token only when it gets closer to expiration
+                // it seems a waste of resources (many token blacklisted by zerv-core when poor connection)
                 const duration = (expectancy * 50 / 100) | 0;
                 if (debug) {
                     console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
