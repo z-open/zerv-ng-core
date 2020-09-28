@@ -203,12 +203,12 @@ function authProvider() {
                     // by default the socket will reconnect after any disconnection error (except if disconnect co
                     // default value: https://socket.io/docs/client-api/#new-Manager-url-options
 
-                    // reconnectionAttempts	Infinity	number of reconnection attempts before giving up
-                    // reconnectionDelay	1000	how long to initially wait before attempting a new reconnection. Affected by +/- randomizationFactor, for example the default initial delay will be between 500 to 1500ms.
-                    // reconnectionDelayMax	5000	maximum amount of time to wait between reconnections. Each attempt increases the reconnection delay by 2x along with a randomization factor.
-                    // randomizationFactor	0.5	0 <= randomizationFactor <= 1
-                    // timeout	20000	connection timeout before a connect_error and connect_timeout events are emitted
-                    // autoConnect	true	by setting this false, you have to call manager.open whenever you decide it’s appropriate
+                    // reconnectionAttempts: Infinity - number of reconnection attempts before giving up
+                    // reconnectionDelay:1000 how long to initially wait before attempting a new reconnection. Affected by +/- randomizationFactor, for example the default initial delay will be between 500 to 1500ms.
+                    // reconnectionDelayMax:5000 maximum amount of time to wait between reconnections. Each attempt increases the reconnection delay by 2x along with a randomization factor.
+                    // randomizationFactor:0.5 0 <= randomizationFactor <= 1
+                    // timeout:20000 connection timeout before a connect_error and connect_timeout events are emitted
+                    // autoConnect:true by setting this false, you have to call manager.open whenever you decide it’s appropriate
                 }
             );
             // When using long polling the load balancer must be set to you sticky session to establish the socket connection
