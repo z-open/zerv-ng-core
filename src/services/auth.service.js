@@ -149,9 +149,12 @@ function authProvider() {
 
         function getForValidConnection() {
             const deferred = $q.defer();
+            // The socket might be no longer physically connected
+            // but since the PING PONG has not happened yet, it is believed to be connected.
             if (sessionUser.connected) {
                 deferred.resolve(socket);
             } else {
+                // In this case, it is obvious that the connection was lost.
                 // being the scene, socket.io is trying to reconnect and authenticate if the connection was lost;
                 reconnect().then(function() {
                     deferred.resolve(socket);
@@ -261,7 +264,7 @@ function authProvider() {
 
                 // the server confirmed that the token is valid...we are good to go
                 if (debug) {
-                    console.debug('authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
+                    console.debug('AUTH(debug): authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
                 }
                 localStorage.token = refreshToken;
 
@@ -298,7 +301,7 @@ function authProvider() {
             function onUnauthorized(msg) {
                 clearNewTokenRequestTimeout();
                 if (debug) {
-                    console.debug('unauthorized: ' + JSON.stringify(msg));
+                    console.debug('AUTH(debug): unauthorized: ' + JSON.stringify(msg));
                 }
                 setConnectionStatus(false, 'unauthorized');
                 if (onUnauthorizedCallback) {
@@ -320,7 +323,7 @@ function authProvider() {
 
             function setConnectionStatus(connected, reason) {
                 if (debug) {
-                    console.debug('Session Status: ' + (connected ? 'connected' : 'disconnected(' + reason + ')'));
+                    console.debug('AUTH(debug): Session Status: ' + (connected ? 'connected' : 'disconnected(' + reason + ')'));
                 }
                 if (sessionUser.connected !== connected) {
                     sessionUser.connected = connected;
@@ -377,11 +380,11 @@ function authProvider() {
                 // it seems a waste of resources (many token blacklisted by zerv-core when poor connection)
                 const duration = (expectancy * 50 / 100) | 0;
                 if (debug) {
-                    console.debug('Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
+                    console.debug('AUTH(debug): Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
                 }
                 tokenRequestTimeout = $timeout(function() {
                     if (debug) {
-                        console.debug('Time to request new token');
+                        console.debug('AUTH(debug): Time to request new token');
                     }
                     // re authenticate with the token from the storage since another browser could have modified it.
                     if (!localStorage.token) {
@@ -427,7 +430,7 @@ function authProvider() {
         // as soon as there is a user activity the timeout will be resetted but not more than once every sec.
         const notifyUserActivity = _.throttle(
             () => {
-                debug && console.debug('User active');
+                debug && console.debug('AUTH(debug): User activity detected');
                 resetMonitor();
             },
             1000,
@@ -471,7 +474,7 @@ function authProvider() {
             localStorage.lastActivity = Date.now();
             window.clearTimeout(monitor.timeoutId);
             if (monitor.timeoutInMins !== 0) {
-                debug && console.debug('User inactivity timeout resetted');
+                debug && console.debug('AUTH(debug): User inactivity timeout resetted');
                 monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
             }
         };
@@ -498,7 +501,7 @@ function authProvider() {
             pos += 6;
             localStorage.token = window.location.href.substring(pos);
             if (debug) {
-                console.debug('Using Auth Code passed during redirection: ' + localStorage.token);
+                console.debug('AUTH(debug): Using Auth Code passed during redirection: ' + localStorage.token);
             }
             window.history.replaceState({}, document.title, url);
         }
