@@ -28,9 +28,10 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onConnectCallback, onDisconnectCallback, onUnauthorizedCallback;
+    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onUnauthorizedCallback;
     let longPolling = false;
     let socketConnectionOptions;
+    const listeners = {};
 
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
 
@@ -62,12 +63,12 @@ function authProvider() {
     };
 
     this.onConnect = function(callback) {
-        onConnectCallback = callback;
+        addListener('connect', callback);
         return this;
     };
 
     this.onDisconnect = function(callback) {
-        onDisconnectCallback = callback;
+        addListener('disconnect', callback);
         return this;
     };
 
@@ -114,7 +115,9 @@ function authProvider() {
             getSessionUser,
             redirect,
             setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
-            getRemainingInactiveTime: userInactivityMonitor.getRemainingTime
+            getRemainingInactiveTime: userInactivityMonitor.getRemainingTime,
+            addConnectionListener,
+            addDisconnectionListener,
         };
 
         userInactivityMonitor.onTimeout = () => service.logout('inactive_session_timeout');
@@ -122,7 +125,13 @@ function authProvider() {
         return service;
 
 
-        // /////////////////
+        function addConnectionListener(callback) {
+            return addListener('connect', callback);
+        };
+    
+        function addDisconnectionListener(callback) {
+            return addListener('disconnect', callback);
+        };
 
         function getSessionUser() {
             // the object will have the user information when the connection is established. Otherwise its connection property will be false;
@@ -327,12 +336,11 @@ function authProvider() {
                 }
                 if (sessionUser.connected !== connected) {
                     sessionUser.connected = connected;
-                    if (connected && onConnectCallback) {
-                        onConnectCallback(sessionUser);
-                    } else if (!connected && onDisconnectCallback) {
-                        onDisconnectCallback(sessionUser);
+                    if (connected) {
+                        notifyListeners('connect', sessionUser);
+                    } else {
+                        notifyListeners('disconnect', sessionUser);
                     }
-                    // console.debug("Connection status:" + JSON.stringify(sessionUser));
                 }
             }
 
@@ -506,5 +514,21 @@ function authProvider() {
             window.history.replaceState({}, document.title, url);
         }
         return localStorage.token;
+    }
+
+    function addListener(type, callback) {
+        const id = type + Date.now();
+        let typeListeners = listeners[type];
+        if (!typeListeners) {
+            typeListeners = listeners[type] = {};
+        }
+        typeListeners[id] = callback;
+        return () => {
+            delete typeListeners[id];
+        }
+    }
+    
+    function notifyListeners(type, ...params) {
+        _.forEach(listeners[type], (callback) => callback(...params));
     }
 }

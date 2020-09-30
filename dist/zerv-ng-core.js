@@ -39,11 +39,10 @@
         debug = void 0,
         reconnectionMaxTime = 15,
         onSessionExpirationCallback = void 0,
-        onConnectCallback = void 0,
-        onDisconnectCallback = void 0,
         onUnauthorizedCallback = void 0;
     var longPolling = false;
     var socketConnectionOptions = void 0;
+    var listeners = {};
     localStorage.token = retrieveAuthCodeFromUrlOrTokenFromStorage();
     var userInactivityMonitor = createInactiveSessionMonitoring();
 
@@ -73,12 +72,12 @@
     };
 
     this.onConnect = function (callback) {
-      onConnectCallback = callback;
+      addListener('connect', callback);
       return this;
     };
 
     this.onDisconnect = function (callback) {
-      onDisconnectCallback = callback;
+      addListener('disconnect', callback);
       return this;
     };
 
@@ -123,14 +122,28 @@
         getSessionUser: getSessionUser,
         redirect: redirect,
         setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
-        getRemainingInactiveTime: userInactivityMonitor.getRemainingTime
+        getRemainingInactiveTime: userInactivityMonitor.getRemainingTime,
+        addConnectionListener: addConnectionListener,
+        addDisconnectionListener: addDisconnectionListener
       };
 
       userInactivityMonitor.onTimeout = function () {
         return service.logout('inactive_session_timeout');
       };
 
-      return service; // /////////////////
+      return service;
+
+      function addConnectionListener(callback) {
+        return addListener('connect', callback);
+      }
+
+      ;
+
+      function addDisconnectionListener(callback) {
+        return addListener('disconnect', callback);
+      }
+
+      ;
 
       function getSessionUser() {
         // the object will have the user information when the connection is established. Otherwise its connection property will be false;
@@ -342,12 +355,11 @@
           if (sessionUser.connected !== connected) {
             sessionUser.connected = connected;
 
-            if (connected && onConnectCallback) {
-              onConnectCallback(sessionUser);
-            } else if (!connected && onDisconnectCallback) {
-              onDisconnectCallback(sessionUser);
-            } // console.debug("Connection status:" + JSON.stringify(sessionUser));
-
+            if (connected) {
+              notifyListeners('connect', sessionUser);
+            } else {
+              notifyListeners('disconnect', sessionUser);
+            }
           }
         }
 
@@ -535,6 +547,30 @@
 
       return localStorage.token;
     }
+
+    function addListener(type, callback) {
+      var id = type + Date.now();
+      var typeListeners = listeners[type];
+
+      if (!typeListeners) {
+        typeListeners = listeners[type] = {};
+      }
+
+      typeListeners[id] = callback;
+      return function () {
+        delete typeListeners[id];
+      };
+    }
+
+    function notifyListeners(type) {
+      for (var _len = arguments.length, params = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+        params[_key - 1] = arguments[_key];
+      }
+
+      _.forEach(listeners[type], function (callback) {
+        return callback.apply(undefined, params);
+      });
+    }
   }
 })();
 "use strict";
@@ -633,8 +669,10 @@
         return socketEmit(operation, data, options);
       }
       /**
-       * post sends data to the server.
-       * if data was already submitted, it would just return - which could happen when handling disconnection.
+       * post sends data to the server in order to modify data.
+       * 
+       * There is no guarantee that the post made it to the server if it times out
+       * Currenlty, this will not retry in case of network failure to avoid posting multiple times the same data.
        * 
        */
 
@@ -652,35 +690,69 @@
           timeout: Infinity
         });
       }
+      /**
+       * This function wraps the level socket emit function which is not re-emitting the data by itself currently.
+       * 
+       * If the emit fails and option.attempts is set, it will retry as soon as the network detected available (with no wait time)
+       * A timeout prevents to wait eternally if the network never comes back
+       * 
+       * @param {String} operation 
+       * @param {Object} data 
+       * @param {Option} options 
+       * 
+       * @returns {Promise} the result from the api call
+       */
+
 
       function socketEmit(operation, data) {
         var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
         var serialized = transport.serialize(data);
-        return $auth.connect().then(onConnectionSuccess, onConnectionError);
+        var deferred = $q.defer();
+        var attemptNb = 1;
+        var maxAttempt = options.attempts || defaultMaxAttempts;
+        var timeoutInSecs = 240 || options.timeout || defaultTimeout;
+        var timeoutHandler = void 0;
+        var listener = void 0; // system is believed to be connected
 
-        function onConnectionSuccess(socket) {
-          var deferred = $q.defer();
-          var maxAttempt = options.attempts || defaultMaxAttempts;
-          var timeoutInSecs = options.timeout || defaultTimeout; // the connection is supposed to be established
-          // if not, during the process of the emit, it will fail
-          // the emit will never receive the ack
-          // data might have arrived, not sure
-          // this could be stamped
-          // and retry anyway
+        if (timeoutInSecs !== Infinity && _.isNumber(timeoutInSecs)) {
+          // if times out, it means there is too much slowness or processing and it might be better UX to give up and release resources
+          // ex that can trigger timeout:
+          // 1. ui execute socket emit and wait
+          // 2. ui executes lots of processing (large loop, or many promises to get execute first)
+          // 3. then emit might NOT process the response due to step 2 took too much time. socketEmit will timeout
+          // and warn the user that there is connectivity issue and should manually retry.
+          // but at least the user would understand that the data might not be updated.
+          timeoutHandler = setTimeout(function () {
+            var result = {
+              code: 'EMIT_TIMEOUT',
+              description: "Failed to emit [" + operation + "] or process response - Network or browser too busy - timed out after " + timeoutInSecs + " and " + attemptNb + " attempt(s)"
+            };
+            debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
+            deferred.reject({
+              code: result.code,
+              description: result.data
+            });
+          }, timeoutInSecs * 1000);
+        }
 
-          emit(1);
-
-          function emit(attemptNb) {
-            var timeoutHandler = void 0;
-            if (timeoutInSecs !== Infinity && _.isNumber(timeoutInSecs)) timeoutHandler = setTimeout(function () {
-              if (maxAttempt > attemptNb) {
-                // most likely the connection was lost right before emit..
-                socket.connect();
-                emit(++attemptNb);
+        var startTime = Date.now();
+        $auth.connect().then(function (socket) {
+          // socket is successfully connected
+          if (maxAttempt > 1) {
+            // if socket disconnects and reconnects during the emit
+            // the emit will most likely not make it and acknowledge (emit never throws error)
+            // On reconnect, let's emit again
+            // but we just don't know when connection might come back, socketio is trying in the background.
+            // Timeout might kick in at some point to cancel the operation
+            listener = $auth.addConnectionListener(function () {
+              // system just reconnected
+              // let's emit again
+              if (maxAttempt > ++attemptNb) {
+                emit(socket);
               } else {
                 var result = {
-                  code: 'EMIT_TIMEOUT',
-                  description: 'Failed to emit ' + operation
+                  code: 'EMIT_RETRY_ERR',
+                  description: "Failed to emit to [" + operation + "] or process response - Made " + attemptNb + " attempt(s)"
                 };
                 debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
                 deferred.reject({
@@ -688,41 +760,120 @@
                   description: result.data
                 });
               }
-            }, timeoutInSecs * 1000);
-            debug && console.debug("IO(debug): socket emitting " + operation + " - attempt " + attemptNb + "/" + maxAttempt);
-            socket.emit('api', operation, serialized, function (serializedResult) {
-              clearTimeout(timeoutHandler);
-
-              if (debug) {
-                console.debug('IO(debug): ACKed socketEmit ' + operation);
-              }
-
-              var result = transport.deserialize(serializedResult);
-
-              if (result.code) {
-                debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
-                deferred.reject({
-                  code: result.code,
-                  description: result.data
-                });
-              } else {
-                deferred.resolve(result.data);
-              }
             });
           }
 
-          return deferred.promise;
-        }
-
-        function onConnectionError(err) {
+          emit(socket);
+        }).catch(function (err) {
+          // if the connection layer could connect, no need to try emit.
+          clearTimeout(timeoutHandler);
           var result = {
             code: 'CONNECTION_ERR',
             description: err
           };
-          debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
-          return $q.reject(result);
+          debug && console.debug('IO(debug): Error on [' + operation + '] ->' + JSON.stringify(result));
+          deferred.reject(result);
+        });
+        return deferred.promise.finally(function () {
+          if (listener) {
+            // there is no longer a need to listen for connection, since the promise completed
+            listener();
+          }
+        });
+
+        function emit(socket) {
+          debug && console.debug("IO(debug): socket emitting compressed data [" + getJsonSize(serialized) + "] to [" + operation + "] - attempt " + attemptNb + "/" + maxAttempt);
+          socket.emit('api', operation, serialized, function (serializedResult) {
+            clearTimeout(timeoutHandler);
+            var dataReceivedIn = Date.now() - startTime;
+            debug && console.debug("IO(debug): Received compressed data [" + getJsonSize(serializedResult) + "] from [" + operation + "] in " + dataReceivedIn.toFixed(0) + "ms and " + attemptNb + " attempt(s)");
+            var result = transport.deserialize(serializedResult);
+
+            if (result.code) {
+              debug && console.debug('IO(debug): Error emitting [' + operation + '] ->' + JSON.stringify(result));
+              deferred.reject({
+                code: result.code,
+                description: result.data
+              });
+            } else {
+              deferred.resolve(result.data);
+            }
+          });
         }
-      }
+      } // function socketEmit2(operation, data, options = {}) {
+      //     const serialized = transport.serialize(data);
+      //     return $auth.connect()
+      //         .then(onConnectionSuccess, onConnectionError);
+      //     function onConnectionSuccess(socket) {
+      //         const deferred = $q.defer();
+      //         const maxAttempt = options.attempts || defaultMaxAttempts;
+      //         const timeoutInSecs = options.timeout || defaultTimeout;
+      //         // the connection is supposed to be established
+      //         // if not, during the process of the emit, it will fail
+      //         // the emit will never receive the ack
+      //         // data might have arrived, not sure
+      //         // this could be stamped
+      //         // and retry anyway
+      //         emit(1);
+      //         function emit(attemptNb) {
+      //             let timeoutHandler;
+      //             if (timeoutInSecs !== Infinity && _.isNumber(timeoutInSecs))
+      //                 timeoutHandler = setTimeout(() => {
+      //                 if (maxAttempt > attemptNb) {
+      //                     // most likely the connection was lost right before emit..
+      //                     socket.connect();
+      //                     emit(++attemptNb);
+      //                 } else {
+      //                     const result = {code: 'EMIT_TIMEOUT', description: 'Failed to emit '+ operation};
+      //                     debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
+      //                     deferred.reject({code: result.code, description: result.data});
+      //                 }
+      //             }, timeoutInSecs * 1000);
+      //             debug && console.debug(`IO(debug): socket emitting ${operation} - attempt ${attemptNb}/${maxAttempt}`);
+      //             socket.emit('api', operation, serialized, function(serializedResult) {
+      //                 clearTimeout(timeoutHandler);
+      //                 if (debug) {
+      //                     console.debug('IO(debug): ACKed socketEmit ' + operation);
+      //                 }
+      //                 const result = transport.deserialize(serializedResult);
+      //                 if (result.code) {
+      //                     debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
+      //                     deferred.reject({code: result.code, description: result.data});
+      //                 } else {
+      //                     deferred.resolve(result.data);
+      //                 }
+      //             });
+      //         }
+      //         return deferred.promise;
+      //     }
+      //     function onConnectionError(err) {
+      //         const result = {code: 'CONNECTION_ERR', description: err};
+      //         debug && console.debug('IO(debug): Error on ' + operation + ' ->' + JSON.stringify(result));
+      //         return $q.reject(result);
+      //     }
+      // }
+
     }];
+
+    function getJsonSize(obj) {
+      if (_.isNil(obj)) {
+        return 'none';
+      }
+
+      return formatSize(JSON.stringify(obj).length);
+    }
+
+    function formatSize(size) {
+      return size > 1000000 ? roundNumber(size / 1000000, 3) + 'Mgb' : size > 1000 ? roundNumber(size / 1000, 3) + 'Kb' : roundNumber(size) + 'b';
+    }
+
+    function roundNumber(num, n) {
+      if (!n) {
+        return Math.round(num);
+      }
+
+      var d = Math.pow(10, n);
+      return Math.round(num * d) / d;
+    }
   }
 })();
