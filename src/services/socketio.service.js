@@ -55,7 +55,7 @@ function socketioProvider() {
     this.getDefaultMaxTimeout = () => defaultTimeoutInSecs;
 
     this.setDefaultMaxAttemps(3);
-    this.setDefaultTimeoutInSecs(60);
+    this.setDefaultTimeoutInSecs(120);
 
     this.$get = function socketioService($rootScope, $q, $auth) {
         return {

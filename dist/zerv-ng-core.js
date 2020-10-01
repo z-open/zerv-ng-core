@@ -646,7 +646,7 @@
     };
 
     this.setDefaultMaxAttemps(3);
-    this.setDefaultTimeoutInSecs(60);
+    this.setDefaultTimeoutInSecs(120);
 
     this.$get = ["$rootScope", "$q", "$auth", function socketioService($rootScope, $q, $auth) {
       return {
