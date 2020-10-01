@@ -494,7 +494,7 @@ function authProvider() {
             } else {
                 // still need to wait, user was active in another tab
                 // This tab must take in consideration the last activity
-                debug && console.debug(`User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
+                debug && console.debug(`AUTH(debug): User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
                 monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);  
             }
         };
