@@ -26,7 +26,8 @@ describe('Unit testing for socket,', function () {
                     deferred.resolve(socket);
                 }
                 return deferred.promise;
-            }
+            },
+            addConnectionListener: jasmine.createSpy('addConnectionListener')
         };
 
         module(function ($provide) {

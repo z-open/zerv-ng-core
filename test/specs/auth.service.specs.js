@@ -132,6 +132,26 @@ describe('Unit testing for auth,', () => {
         });
     });
 
+    describe('setSocketConnectionOptions', () => {
+
+        it('setSocketConnectionOptions should set the socket options', (done) => {
+            localStorage.token = "vvvv";
+            authProvider.setSocketConnectionOptions({someSocketIoOption: 'value'});
+            $auth.connect();
+            expect( window.io.connect).toHaveBeenCalledWith({ someSocketIoOption: 'value', forceNew: true, transports: [ 'websocket' ] });
+            done();
+        });
+
+        it('should be set to default value (when not called)', (done) => {
+            localStorage.token = "vvvv";
+            $auth.connect();
+            expect( window.io.connect).toHaveBeenCalledWith({ forceNew: true, transports: [ 'websocket' ] });
+            done();
+        });
+
+    });
+    
+
     describe('User inactivity monitor', () => {
         
         beforeEach(() => {
@@ -144,6 +164,7 @@ describe('Unit testing for auth,', () => {
         afterEach(() => {
             jasmine.clock().uninstall();
         });
+        
 
         describe('setInactiveSessionTimeoutInMins', () => {
 
@@ -286,7 +307,7 @@ describe('Unit testing for auth,', () => {
                 socketListeners[event] = fn;
                 return socket;
             },
-            connect: () => _.noop
+            connect: jasmine.createSpy('socketConnect')
         }
 
         socket.emit.and.callFake(
