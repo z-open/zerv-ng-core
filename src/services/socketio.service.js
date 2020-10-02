@@ -32,7 +32,7 @@ function socketioProvider() {
      */
     this.setDefaultMaxAttemps = (value) => {
         defaultMaxAttempts = value !== 0 ? value : Infinity;
-        logDebug(() => 'set defaultMaxAttempts to ' + defaultMaxAttempts);
+        debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
         return this;
     }
 
@@ -46,7 +46,7 @@ function socketioProvider() {
      */
     this.setDefaultTimeoutInSecs = (value) => {
         defaultTimeoutInSecs = value !== 0 ? value : Infinity;
-        logDebug(() => 'set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
+        debug && logDebug('set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
         return this;
     }
 
@@ -149,7 +149,7 @@ function socketioProvider() {
             const emitMaxAttempts = options.attempts || defaultMaxAttempts;
             const emitTimeoutInSecs = options.timeout || defaultTimeoutInSecs;
             let timeoutHandler;
-            let listener;
+            let listenerOff;
             // system is believed to be connected
             if (emitTimeoutInSecs !== Infinity && _.isNumber(emitTimeoutInSecs)) {
                 // if times out, it means there is too much slowness or processing and it might be better UX to give up and release resources
@@ -161,7 +161,7 @@ function socketioProvider() {
                 // but at least the user would understand that the data might not be updated.
                 timeoutHandler = setTimeout(() => {
                     const result = {code: 'EMIT_TIMEOUT', description: `Failed to emit [${type}/${operation}] or process response - Network or browser too busy - timed out after ${emitTimeoutInSecs} and ${attemptNb} attempt(s)`};
-                    logDebug(() => `Error on [${type}/${operation}] ->` + JSON.stringify(result));
+                    debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
                     deferred.reject({code: result.code, description: result.data});
                 }, emitTimeoutInSecs * 1000);
             }
@@ -176,9 +176,9 @@ function socketioProvider() {
 
             return deferred.promise
                 .finally(() => {
-                    if (listener) {
+                    if (listenerOff) {
                         // there is no longer a need to listen for connection, since the promise completed
-                        listener();
+                        listenerOff();
                     }
                 })
 
@@ -190,14 +190,14 @@ function socketioProvider() {
                     // On reconnect, let's emit again
                     // but we just don't know when connection might come back, socketio is trying in the background.
                     // Timeout might kick in at some point to cancel the operation
-                    listener = $auth.addConnectionListener(() => {
+                    listenerOff = $auth.addConnectionListener(() => {
                         // system just reconnected
                         // let's emit again
                         if (emitMaxAttempts > ++attemptNb) {
                             emitData(socket);
                         } else {
                             const result = { code: 'EMIT_RETRY_ERR', description: `Failed to emit to [${type}/${operation}] or process response - Made ${attemptNb} attempt(s)` };
-                            logDebug(() => `Error on [${type}/${operation}] ->` + JSON.stringify(result));
+                            debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
                             deferred.reject({ code: result.code, description: result.data });
                         }
                     });
@@ -208,12 +208,12 @@ function socketioProvider() {
             function onConnectionError(err) {
                 clearTimeout(timeoutHandler);
                 const result = {code: 'CONNECTION_ERR', description: err};
-                logDebug(() => `Error on  [${type}/${operation}] ->` + JSON.stringify(result));
+                debug && logDebug(`Error on  [${type}/${operation}] ->` + JSON.stringify(result));
                 deferred.reject(result);
             }
 
             function emitData(socket) {
-                logDebug(() => `socket emitting compressed data [${ getJsonSize(serialized) }] to [${type}/${operation}] - attempt ${attemptNb}/${emitMaxAttempts}`);
+                debug && logDebug(`socket emitting compressed data [${ getJsonSize(serialized) }] to [${type}/${operation}] - attempt ${attemptNb}/${emitMaxAttempts}`);
 
                 socket.emit('api', operation, serialized, function(serializedResult) {
                     clearTimeout(timeoutHandler);
@@ -222,7 +222,7 @@ function socketioProvider() {
                     const result = transport.deserialize(serializedResult);
 
                     if (result.code) {
-                        logDebug(() => `Error emitting [${type}/${operation}] ->` + JSON.stringify(result));
+                        debug && logDebug(`Error emitting [${type}/${operation}] ->` + JSON.stringify(result));
                         deferred.reject({code: result.code, description: result.data});
                     } else {
                         deferred.resolve(result.data);
@@ -252,15 +252,7 @@ function socketioProvider() {
     }
 
     function logDebug(msg) {
-        if (!debug) {
-            return;
-        }
-        if (_.isFunction(msg)) {
-            console.debug('IO(debug): ' + msg());
-        } else {
-            // not recommended, if msg is concatenation
-            console.debug('IO(debug): ' + msg);
-        }
+        console.debug('IO(debug): ' + msg);
     }
 }
 

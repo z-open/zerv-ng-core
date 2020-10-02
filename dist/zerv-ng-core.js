@@ -614,9 +614,7 @@
 
     this.setDefaultMaxAttemps = function (value) {
       defaultMaxAttempts = value !== 0 ? value : Infinity;
-      logDebug(function () {
-        return 'set defaultMaxAttempts to ' + defaultMaxAttempts;
-      });
+      debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
       return _this;
     };
     /**
@@ -631,9 +629,7 @@
 
     this.setDefaultTimeoutInSecs = function (value) {
       defaultTimeoutInSecs = value !== 0 ? value : Infinity;
-      logDebug(function () {
-        return 'set defaultTimeoutInSecs to ' + defaultTimeoutInSecs;
-      });
+      debug && logDebug('set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
       return _this;
     };
 
@@ -754,7 +750,7 @@
         var emitMaxAttempts = options.attempts || defaultMaxAttempts;
         var emitTimeoutInSecs = options.timeout || defaultTimeoutInSecs;
         var timeoutHandler = void 0;
-        var listener = void 0; // system is believed to be connected
+        var listenerOff = void 0; // system is believed to be connected
 
         if (emitTimeoutInSecs !== Infinity && _.isNumber(emitTimeoutInSecs)) {
           // if times out, it means there is too much slowness or processing and it might be better UX to give up and release resources
@@ -769,9 +765,7 @@
               code: 'EMIT_TIMEOUT',
               description: "Failed to emit [" + type + "/" + operation + "] or process response - Network or browser too busy - timed out after " + emitTimeoutInSecs + " and " + attemptNb + " attempt(s)"
             };
-            logDebug(function () {
-              return "Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result);
-            });
+            debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));
             deferred.reject({
               code: result.code,
               description: result.data
@@ -785,9 +779,9 @@
         // (Or could we rely on the emit timout instead?)
         .catch(onConnectionError);
         return deferred.promise.finally(function () {
-          if (listener) {
+          if (listenerOff) {
             // there is no longer a need to listen for connection, since the promise completed
-            listener();
+            listenerOff();
           }
         });
 
@@ -799,7 +793,7 @@
             // On reconnect, let's emit again
             // but we just don't know when connection might come back, socketio is trying in the background.
             // Timeout might kick in at some point to cancel the operation
-            listener = $auth.addConnectionListener(function () {
+            listenerOff = $auth.addConnectionListener(function () {
               // system just reconnected
               // let's emit again
               if (emitMaxAttempts > ++attemptNb) {
@@ -809,9 +803,7 @@
                   code: 'EMIT_RETRY_ERR',
                   description: "Failed to emit to [" + type + "/" + operation + "] or process response - Made " + attemptNb + " attempt(s)"
                 };
-                logDebug(function () {
-                  return "Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result);
-                });
+                debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));
                 deferred.reject({
                   code: result.code,
                   description: result.data
@@ -829,16 +821,12 @@
             code: 'CONNECTION_ERR',
             description: err
           };
-          logDebug(function () {
-            return "Error on  [" + type + "/" + operation + "] ->" + JSON.stringify(result);
-          });
+          debug && logDebug("Error on  [" + type + "/" + operation + "] ->" + JSON.stringify(result));
           deferred.reject(result);
         }
 
         function emitData(socket) {
-          logDebug(function () {
-            return "socket emitting compressed data [" + getJsonSize(serialized) + "] to [" + type + "/" + operation + "] - attempt " + attemptNb + "/" + emitMaxAttempts;
-          });
+          debug && logDebug("socket emitting compressed data [" + getJsonSize(serialized) + "] to [" + type + "/" + operation + "] - attempt " + attemptNb + "/" + emitMaxAttempts);
           socket.emit('api', operation, serialized, function (serializedResult) {
             clearTimeout(timeoutHandler);
             var dataReceivedIn = Date.now() - startTime;
@@ -846,9 +834,7 @@
             var result = transport.deserialize(serializedResult);
 
             if (result.code) {
-              logDebug(function () {
-                return "Error emitting [" + type + "/" + operation + "] ->" + JSON.stringify(result);
-              });
+              debug && logDebug("Error emitting [" + type + "/" + operation + "] ->" + JSON.stringify(result));
               deferred.reject({
                 code: result.code,
                 description: result.data
@@ -883,16 +869,7 @@
     }
 
     function logDebug(msg) {
-      if (!debug) {
-        return;
-      }
-
-      if (_.isFunction(msg)) {
-        console.debug('IO(debug): ' + msg());
-      } else {
-        // not recommended, if msg is concatenation
-        console.debug('IO(debug): ' + msg);
-      }
+      console.debug('IO(debug): ' + msg);
     }
   }
 })();
