@@ -806,8 +806,8 @@
 
           return setTimeout(function () {
             var result = {
-              code: 'EMIT_TIMEOUT_ERR',
-              description: "Failed to emit [" + type + "/" + operation + "] or process response - Network or browser too busy - timed out after " + emitTimeoutInSecs + " and " + attemptNb + " attempt(s)"
+              code: 'NO_SERVER_RESPONSE_ERR',
+              description: "Failed to emit [" + type + "/" + operation + "] or process response - Network or browser too busy - timed out after " + emitTimeoutInSecs + " secs and " + attemptNb + " attempt(s)"
             };
             debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));
             deferred.reject({
@@ -832,7 +832,7 @@
                 emitData(socket);
               } else {
                 var result = {
-                  code: 'EMIT_RETRY_ERR',
+                  code: 'NO_SERVER_RESPONSE_ERR',
                   description: "Failed to emit to [" + type + "/" + operation + "] or process response - Made " + attemptNb + " attempt(s)"
                 };
                 debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));

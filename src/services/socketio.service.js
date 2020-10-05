@@ -203,7 +203,7 @@ function socketioProvider() {
                 // UI should warn the user that there is connectivity issue and should manually retry.
                 // but at least the user would understand that the data might not be updated.
                 return setTimeout(() => {
-                    const result = {code: 'EMIT_TIMEOUT_ERR', description: `Failed to emit [${type}/${operation}] or process response - Network or browser too busy - timed out after ${emitTimeoutInSecs} and ${attemptNb} attempt(s)`};
+                    const result = {code: 'NO_SERVER_RESPONSE_ERR', description: `Failed to emit [${type}/${operation}] or process response - Network or browser too busy - timed out after ${emitTimeoutInSecs} secs and ${attemptNb} attempt(s)`};
                     debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
                     deferred.reject({code: result.code, description: result.data});
                 }, emitTimeoutInSecs * 1000);
@@ -223,7 +223,7 @@ function socketioProvider() {
                         if (emitMaxAttempts > ++attemptNb) {
                             emitData(socket);
                         } else {
-                            const result = { code: 'EMIT_RETRY_ERR', description: `Failed to emit to [${type}/${operation}] or process response - Made ${attemptNb} attempt(s)` };
+                            const result = { code: 'NO_SERVER_RESPONSE_ERR', description: `Failed to emit to [${type}/${operation}] or process response - Made ${attemptNb} attempt(s)` };
                             debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
                             deferred.reject({ code: result.code, description: result.data });
                         }
