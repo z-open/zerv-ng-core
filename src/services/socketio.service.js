@@ -65,6 +65,7 @@ function socketioProvider() {
             fetch: fetch,
             post: post,
             notify: notify,
+            _socketEmit
         };
 
         // /////////////////
@@ -107,7 +108,7 @@ function socketioProvider() {
             // it is very important to define the timeout
             // fetching lots of data might take time for some api call, timeout shoud be increased
             // after the timeout passes system will retry;
-            return socketEmit(operation, data, 'fetch', options);
+            return _socketEmit(operation, data, 'fetch', options);
         }
 
         /**
@@ -120,7 +121,7 @@ function socketioProvider() {
          * @returns {Promise<Object} data received
          */
         function notify(operation, data, options = {}) {
-            return socketEmit(operation, data, 'notify', options);
+            return _socketEmit(operation, data, 'notify', options);
         }
 
         /**
@@ -146,7 +147,7 @@ function socketioProvider() {
             // the calling function should deal with the retry
             // if the operation never returns or adjust the option with timeout/attempts.
             options = _.assign({attempts:1, timeout: 60 * 5}, options);
-            return socketEmit(operation, data, 'post', options);
+            return _socketEmit(operation, data, 'post', options);
         }
 
         /**
@@ -162,7 +163,7 @@ function socketioProvider() {
          * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
          * @returns {Promise<Object} data received
          */
-        function socketEmit(operation, data, type, options = {}) {
+        function _socketEmit(operation, data, type, options = {}) {
             const serialized = transport.serialize(data);
             const deferred = $q.defer();
             const emitMaxAttempts = options.attempts || defaultMaxAttempts;
@@ -175,13 +176,15 @@ function socketioProvider() {
             $auth
                 // make sure socket is connected at least.
                 .connect()
-                .then(handleEmitAttempts)
                 // if the connection layer could connect, no need to try emit at all.
                 // (Or could we rely on the emit timeout instead?)
-                .catch(onConnectionError);
+                .catch(onConnectionError)
+                // otherwise emit
+                .then(handleEmitAttempts);
 
             return deferred.promise
                 .finally(() => {
+                    clearTimeout(timeoutHandler);
                     if (listenerOff) {
                         // there is no longer a need to listen for connection, since the promise completed
                         listenerOff();
@@ -194,18 +197,18 @@ function socketioProvider() {
                         debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
                         deferred.reject({code: result.code, description: result.data});  
                 }
-                // if socketemit times out, it usually means there is too much slowness (network) or UI or backend processing.
+                // if _socketEmit times out, it usually means there is too much slowness (network) or UI or backend processing.
                 // ex that can trigger timeout:
                 // 1. ui execute socket emit and wait
                 // 2. ui executes lots of processing (large loop, or many promises to get executed first)
-                // 3. then emit might NOT process the response due to step 2 taking too much time. socketEmit will timeout.
+                // 3. then emit might NOT process the response due to step 2 taking too much time. _socketEmit will timeout.
                 // Note:
                 // UI should warn the user that there is connectivity issue and should manually retry.
                 // but at least the user would understand that the data might not be updated.
                 return setTimeout(() => {
                     const result = {code: 'NO_SERVER_RESPONSE_ERR', description: `Failed to emit [${type}/${operation}] or process response - Network or browser too busy - timed out after ${emitTimeoutInSecs} secs and ${attemptNb} attempt(s)`};
                     debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
-                    deferred.reject({code: result.code, description: result.data});
+                    deferred.reject(result);
                 }, emitTimeoutInSecs * 1000);
             }
 
@@ -220,12 +223,12 @@ function socketioProvider() {
                     listenerOff = $auth.addConnectionListener(() => {
                         // system just reconnected
                         // let's emit again
-                        if (emitMaxAttempts > ++attemptNb) {
+                        if (emitMaxAttempts >= ++attemptNb) {
                             emitData(socket);
                         } else {
-                            const result = { code: 'NO_SERVER_RESPONSE_ERR', description: `Failed to emit to [${type}/${operation}] or process response - Made ${attemptNb} attempt(s)` };
+                            const result = { code: 'NO_SERVER_RESPONSE_ERR', description: `Failed to emit to [${type}/${operation}] or process response - Made ${emitMaxAttempts} attempt(s)` };
                             debug && logDebug(`Error on [${type}/${operation}] ->` + JSON.stringify(result));
-                            deferred.reject({ code: result.code, description: result.data });
+                            deferred.reject(result);
                         }
                     });
                 }
@@ -233,10 +236,10 @@ function socketioProvider() {
             }
         
             function onConnectionError(err) {
-                clearTimeout(timeoutHandler);
                 const result = {code: 'CONNECTION_ERR', description: err};
                 debug && logDebug(`Error on  [${type}/${operation}] ->` + JSON.stringify(result));
                 deferred.reject(result);
+                return Promise.reject();
             }
 
             function emitData(socket) {
