@@ -34,7 +34,7 @@
   },
   "scripts": {
     "test": "./node_modules/karma/bin/karma start",
-    "eslint": "./node_modules/eslint/bin/eslint.js --fix **/*.js"
+    "eslint": "./node_modules/eslint/bin/eslint.js --fix src/**/*.js test/**/*.js"
   },
   "readmeFilename": "README.md",
   "license": "MIT"
