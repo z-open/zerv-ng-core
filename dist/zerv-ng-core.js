@@ -150,9 +150,9 @@
         return sessionUser;
       }
       /**
-           * returns a promise
-           * the success function receives the socket as a parameter
-           */
+       * returns a promise
+       * the success function receives the socket as a parameter
+       */
 
 
       function connect() {
@@ -605,12 +605,12 @@
       return this;
     };
     /**
-       * Set how many attempts a fetch will happen by default
-       *
-       * The number of attempts might not be reached during a fetch if the timeout kicks in first
-       *
-       * @param {Number} value
-       */
+     * Set how many attempts a fetch will happen by default
+     *
+     * The number of attempts might not be reached during a fetch if the timeout kicks in first
+     *
+     * @param {Number} value
+     */
 
 
     this.setDefaultMaxFetchAttempts = function (value) {
@@ -619,13 +619,13 @@
       return _this;
     };
     /**
-       * Set the maximum time a fetch can take to complete before timing out
-       *
-       * Even though the fetch might be attempted mulitiple times meanwhile.
-       *
-       *
-       * @param {Number} value
-       */
+     * Set the maximum time a fetch can take to complete before timing out
+     *
+     * Even though the fetch might be attempted mulitiple times meanwhile.
+     *
+     *
+     * @param {Number} value
+     */
 
 
     this.setDefaultFetchTimeoutInSecs = function (value) {
@@ -634,13 +634,13 @@
       return _this;
     };
     /**
-       * Set the maximum time a post can take to complete before timing out
-       *
-       * Even though the fetch might be attempted mulitiple times meanwhile.
-       *
-       *
-       * @param {Number} value
-       */
+     * Set the maximum time a post can take to complete before timing out
+     *
+     * Even though the fetch might be attempted mulitiple times meanwhile.
+     *
+     *
+     * @param {Number} value
+     */
 
 
     this.setDefaultPostTimeoutInSecs = function (value) {
@@ -702,16 +702,16 @@
         });
       }
       /**
-           * fetch data the way we call an api
-           * http://stackoverflow.com/questions/20685208/websocket-transport-reliability-socket-io-data-loss-during-reconnection
-           *
-           * @param {String} operation
-           * @param {Object} data
-           * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
-           * @returns {Promise<Object} data received
-           */
+       * fetch data the way we call an api
+       * http://stackoverflow.com/questions/20685208/websocket-transport-reliability-socket-io-data-loss-during-reconnection
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
+       * @returns {Promise<Object} data received
+       */
 
 
       function fetch(operation, data) {
@@ -722,14 +722,14 @@
         return service._socketEmit(operation, data, 'fetch', options);
       }
       /**
-           * notify is similar to fetch but more meaningful
-           * @param {String} operation
-           * @param {Object} data
-           * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
-           * @returns {Promise<Object} data received
-           */
+       * notify is similar to fetch but more meaningful
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
+       * @returns {Promise<Object} data received
+       */
 
 
       function notify(operation, data) {
@@ -737,18 +737,18 @@
         return service._socketEmit(operation, data, 'notify', options);
       }
       /**
-           * post sends data to the server in order to modify data.
-           *
-           * There is no guarantee that the post made it to the server if it times out
-           * Currenlty, this will not retry in case of network failure to avoid posting multiple times the same data.
-           *
-           * @param {String} operation
-           * @param {Object} data
-           * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to 1
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to 300secs
-           * @returns {Promise<Object} data received
-           */
+       * post sends data to the server in order to modify data.
+       *
+       * There is no guarantee that the post made it to the server if it times out
+       * Currenlty, this will not retry in case of network failure to avoid posting multiple times the same data.
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to 1
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to 300secs
+       * @returns {Promise<Object} data received
+       */
 
 
       function post(operation, data) {
@@ -759,30 +759,30 @@
           return lowerCase.indexOf(kw) !== -1;
         })) {
           console.warn("IO(warn): " + operation + " seems to be a fetch, but function post is used. Modify operation name or use function fetch.");
-        } // By default, there is hard coded timeout and trying only once to make sure the post ends at some point.
-        // the calling function should deal with the retry
-        // if the operation never returns or adjust the option with timeout/attempts.
+        } // By default, there is hard coded timeout and the function tries only once to make sure the post ends at some point.
+        // the calling function should deal with the retry as data might have changed between calls.
+        // Otherwise, provide the max attempts to the function.
 
 
-        options = _.assign({
-          attempts: 1,
-          timeout: defaultPostTimeoutInSecs
-        }, options);
+        options = {
+          attempts: options.attempts || 1,
+          timeout: options.timeout || defaultPostTimeoutInSecs
+        };
         return service._socketEmit(operation, data, 'post', options);
       }
       /**
-           * This function wraps the level socket emit function which is not re-emitting the data by itself currently.
-           *
-           * If the emit fails and option.attempts is set, it will retry as soon as the network detected available (with no wait time)
-           * A timeout prevents to wait eternally if the network never comes back
-           *
-           * @param {String} operation
-           * @param {Object} data
-           * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
-           * @returns {Promise<Object} data received
-           */
+       * This function wraps the level socket emit function which is not re-emitting the data by itself currently.
+       *
+       * If the emit fails and option.attempts is set, it will retry as soon as the network detected available (with no wait time)
+       * A timeout prevents to wait eternally if the network never comes back
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
+       * @returns {Promise<Object} data received
+       */
 
 
       function _socketEmit(operation, data, type) {

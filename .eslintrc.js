@@ -7,6 +7,7 @@ module.exports = {
         "ecmaVersion": 6
     },
     rules: {
+        'indent': ['error', 4],
         'no-invalid-this':0,
         'one-var':0,
         'prefer-rest-params': 0,
