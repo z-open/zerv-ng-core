@@ -58,7 +58,7 @@ function socketioProvider() {
   this.setDefaultTimeoutInSecs(120);
 
   this.$get = function socketioService($rootScope, $q, $auth) {
-    return {
+    const service = {
       on: on,
       emit: emit,
       logout: $auth.logout,
@@ -67,6 +67,8 @@ function socketioProvider() {
       notify: notify,
       _socketEmit,
     };
+
+    return service;
 
     // /////////////////
     function on(eventName, callback) {
@@ -108,7 +110,7 @@ function socketioProvider() {
       // it is very important to define the timeout
       // fetching lots of data might take time for some api call, timeout shoud be increased
       // after the timeout passes system will retry;
-      return _socketEmit(operation, data, 'fetch', options);
+      return service._socketEmit(operation, data, 'fetch', options);
     }
 
     /**
@@ -121,7 +123,7 @@ function socketioProvider() {
          * @returns {Promise<Object} data received
          */
     function notify(operation, data, options = {}) {
-      return _socketEmit(operation, data, 'notify', options);
+      return service._socketEmit(operation, data, 'notify', options);
     }
 
     /**
@@ -147,7 +149,7 @@ function socketioProvider() {
       // the calling function should deal with the retry
       // if the operation never returns or adjust the option with timeout/attempts.
       options = _.assign({attempts: 1, timeout: 60 * 5}, options);
-      return _socketEmit(operation, data, 'post', options);
+      return service._socketEmit(operation, data, 'post', options);
     }
 
     /**

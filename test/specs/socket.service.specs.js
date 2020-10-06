@@ -55,33 +55,114 @@ describe('Unit testing for socket,', function() {
   });
 
 
-  xdescribe('Fetch', function() {
-    it('should return the data ', function(done) {
-      var someData = 'precious data';
-      spec.socketResponse = {data: someData};
-      spec.socketService.fetch('test', {}).then(function(data) {
-        expect(data).toEqual(someData);
+  describe('fetch function', function() {
+    beforeEach(() => {
+      spyOn(spec.socketService, '_socketEmit').and.returnValue(Promise.resolve(spec.socketResponse));
+    });
+
+    it('should call the low level _socketEmit function with the default options', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      spec.socketService.fetch('test', spec.dataToEmit).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'fetch',
+            {}
+        );
+        expect(data).toEqual(spec.someData);
         done();
       });
       spec.$rootScope.$apply();
     });
 
-    it('should catch and return an error received from the backend', function(done) {
-      var someErrCode = 'BACKEND_ERR';
-      var someErrDescription = 'Something happened';
-      spec.socketResponse = {code: someErrCode, data: someErrDescription};
-      spec.socketService.fetch('test', {}).catch(function(err) {
-        expect(err.code).toEqual(someErrCode);
-        expect(err.description).toEqual(someErrDescription);
+    it('should call the low level _socketEmit function with the provided options', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      const options = {timeout: 100, attempts: 5};
+      spec.socketService.fetch('test', spec.dataToEmit, options).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'fetch',
+            options
+        );
+        expect(data).toEqual(spec.someData);
+        done();
+      });
+      spec.$rootScope.$apply();
+    });
+  });
+
+  describe('Notify function', function() {
+    beforeEach(() => {
+      spyOn(spec.socketService, '_socketEmit').and.returnValue(Promise.resolve(spec.socketResponse));
+    });
+
+    it('should call the low level _socketEmit function with the default options', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      spec.socketService.notify('test', spec.dataToEmit).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'notify',
+            {}
+        );
+        expect(data).toEqual(spec.someData);
         done();
       });
       spec.$rootScope.$apply();
     });
 
-    it('should catch the connection error ', function(done) {
-      spec.connectError = true;
-      spec.socketService.fetch('test', {}).catch(function(err) {
-        expect(err.code).toEqual('CONNECTION_ERR');
+    it('should call the low level _socketEmit function with the provided options', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      const options = {timeout: 100, attempts: 5};
+      spec.socketService.notify('test', spec.dataToEmit, options).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'notify',
+            options
+        );
+        expect(data).toEqual(spec.someData);
+        done();
+      });
+      spec.$rootScope.$apply();
+    });
+  });
+
+  describe('post function', function() {
+    beforeEach(() => {
+      spyOn(spec.socketService, '_socketEmit').and.returnValue(Promise.resolve(spec.socketResponse));
+    });
+
+    it('should call the low level _socketEmit function with the default options which is one attempt only', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      spec.socketService.post('test', spec.dataToEmit).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'post',
+            {
+              attempts: 1,
+              timeout: 300,
+            }
+        );
+        expect(data).toEqual(spec.someData);
+        done();
+      });
+      spec.$rootScope.$apply();
+    });
+
+    it('should call the low level _socketEmit function with the provided options', function(done) {
+      spec.socketResponse = {data: spec.someData};
+      const options = {timeout: 60, attempts: 5};
+      spec.socketService.post('test', spec.dataToEmit, options).then(function(data) {
+        expect(spec.socketService._socketEmit).toHaveBeenCalledWith(
+            'test',
+            spec.dataToEmit,
+            'post',
+            options
+        );
+        expect(data).toEqual(spec.someData);
         done();
       });
       spec.$rootScope.$apply();
@@ -109,7 +190,6 @@ describe('Unit testing for socket,', function() {
                 'test',
                 spec.dataToEmit,
                 jasmine.any(Function)
-
             );
             expect(data).toEqual(someData);
             done();
