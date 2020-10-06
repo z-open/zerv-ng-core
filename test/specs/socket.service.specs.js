@@ -4,16 +4,20 @@ describe('Unit testing for socket,', function () {
     let socketResponse, connectError;
     let dataToEmit;
     let $auth;
+    var someData;
+
     beforeEach(module('zerv.core', function ($socketioProvider) {
         $socketioProvider.setDebug(true);
     }));
 
     beforeEach(function () {
 
+        someData = 'precious data';
+
         dataToEmit = { someField: 'someValue' };
 
         socket = {
-            emit: function (event, operation, data, callback) {
+            emit: (event, operation, data, callback) => {
                 // console.log("emiting");
                 callback(socketResponse);
             }
@@ -178,7 +182,7 @@ describe('Unit testing for socket,', function () {
             $rootScope.$apply();
         });
 
-        it('should retry on network reconnection 3 times and give up', function (done) {
+        it('should retry on network reconnection the default 3 times and give up', function (done) {
             let connectListenerFn;
             $auth.addConnectionListener.and.callFake((fn) => { connectListenerFn = fn; return _.noop});
 
@@ -192,7 +196,6 @@ describe('Unit testing for socket,', function () {
                     done();
                 });
             // jasmine.clock().tick( 180 * 1000);
-            $rootScope.$apply();
             $rootScope.$apply();
             expect(socket.emit).toHaveBeenCalledTimes(1);
 
@@ -215,16 +218,102 @@ describe('Unit testing for socket,', function () {
             $rootScope.$apply();
             // no more trying
             expect(socket.emit).toHaveBeenCalledTimes(3);
-
         });
 
-        it('should retry on network reconnection and succeed', function () {
+        it('should retry on network reconnection and succeed', function (done) {
+            let attempts = 1;
+
+            let connectListenerFn;
+            $auth.addConnectionListener.and.callFake((fn) => { connectListenerFn = fn; return _.noop});
+            socketResponse = { data: someData };
+
+            socket.emit.and.callFake((event, operation, data, callback) => {
+                if (attempts === 2) {
+                    callback({ data: someData });
+                }
+            });
+            socketService
+                ._socketEmit('test', dataToEmit,'emitTest', { timeout: 180 })
+                .then(function (data) {
+                    expect(socket.emit).toHaveBeenCalledTimes(2);
+                    expect(socket.emit).toHaveBeenCalledWith(
+                        'api',
+                        'test', 
+                        dataToEmit, 
+                        jasmine.any(Function)
+
+                    );
+                    expect(data).toEqual(someData);
+                    done();
+                })
+                .catch(function (err) {
+                    done.fail('Should have not failed with ' + JSON.stringify(err));
+                });
+            // jasmine.clock().tick( 180 * 1000);
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(1);
+
+            // the first emit did not complete since system has just reconnected
+            attempts++;
+            connectListenerFn();
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(2);
         });
 
-        it('should retry on network reconnection the provided number of times', function () {
+        it('should retry on network reconnection the provided number of times', function (done) {
+            let connectListenerFn;
+            $auth.addConnectionListener.and.callFake((fn) => { connectListenerFn = fn; return _.noop});
+
+            socket.emit.and.returnValue(null);
+            socketService
+                ._socketEmit('test', dataToEmit,'emitTest', { attempts: 2 })
+                .catch(function (err) {
+                    expect(err.code).toEqual('NO_SERVER_RESPONSE_ERR');
+                    expect(err.description).toEqual('Failed to emit to [emitTest/test] or process response - Made 2 attempt(s)');
+                    expect(socket.emit).toHaveBeenCalledTimes(2);
+                    done();
+                });
+            // jasmine.clock().tick( 180 * 1000);
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(1);
+
+
+            // the first emit did not complete since system has just reconnected
+            connectListenerFn();
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(2);
+
+            // the 2nd emit did not complete since system has just reconnected
+            connectListenerFn();
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(2);
         });
 
-        it('should retry on network reconnection only 2 times and give up because of the timeout', function () {
+        it('should retry on network reconnection only 2 times and give up because of the timeout', function (done) {
+            let connectListenerFn;
+            $auth.addConnectionListener.and.callFake((fn) => { connectListenerFn = fn; return _.noop});
+
+            socket.emit.and.returnValue(null);
+            socketService
+                ._socketEmit('test', dataToEmit,'emitTest', { timeout: 60, attempts: 3 })
+                .catch(function (err) {
+                    expect(err.code).toEqual('NO_SERVER_RESPONSE_ERR');
+                    expect(err.description).toEqual('Failed to emit [emitTest/test] or process response - Network or browser too busy - timed out after 60 secs and 2 attempt(s)');
+                    expect(socket.emit).toHaveBeenCalledTimes(2);
+                    done();
+                });
+            // jasmine.clock().tick( 180 * 1000);
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(1);
+
+
+            // the first emit did not complete since system has just reconnected
+            connectListenerFn();
+            $rootScope.$apply();
+            expect(socket.emit).toHaveBeenCalledTimes(2);
+
+            jasmine.clock().tick( 180 * 1000);
+            $rootScope.$apply();
         });
       
 

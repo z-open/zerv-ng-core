@@ -26,11 +26,11 @@ function socketioProvider() {
     /**
      * Set how many attempts a fetch will happen by default
      * 
-     * The number of attemps might not be reached during a fetch if the timeout kicks in first
+     * The number of attempts might not be reached during a fetch if the timeout kicks in first
      * 
      * @param {Number} value 
      */
-    this.setDefaultMaxAttemps = (value) => {
+    this.setDefaultMaxAttempts = (value) => {
         defaultMaxAttempts = value !== 0 ? value : Infinity;
         debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
         return this;
@@ -54,7 +54,7 @@ function socketioProvider() {
 
     this.getDefaultMaxTimeout = () => defaultTimeoutInSecs;
 
-    this.setDefaultMaxAttemps(3);
+    this.setDefaultMaxAttempts(3);
     this.setDefaultTimeoutInSecs(120);
 
     this.$get = function socketioService($rootScope, $q, $auth) {
@@ -100,7 +100,7 @@ function socketioProvider() {
          * @param {String} operation 
          * @param {Object} data 
          * @param {Object} options 
-         * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
          * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
          * @returns {Promise<Object} data received
          */
@@ -116,7 +116,7 @@ function socketioProvider() {
          * @param {String} operation 
          * @param {Object} data 
          * @param {Object} options 
-         * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
          * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
          * @returns {Promise<Object} data received
          */
@@ -133,7 +133,7 @@ function socketioProvider() {
          * @param {String} operation 
          * @param {Object} data 
          * @param {Object} options 
-         * @property {Number} options.attempts nb of attemps to try to emit, default to 1
+         * @property {Number} options.attempts nb of attempts to try to emit, default to 1
          * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to 300secs
          * @returns {Promise<Object} data received
          */
@@ -159,7 +159,7 @@ function socketioProvider() {
          * @param {String} operation 
          * @param {Object} data 
          * @param {Object} options 
-         * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
          * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
          * @returns {Promise<Object} data received
          */
