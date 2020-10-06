@@ -128,7 +128,7 @@ describe('Unit testing for auth,', () => {
   });
 
   describe('setSocketConnectionOptions', () => {
-    it('setSocketConnectionOptions should set the socket options', (done) => {
+    it('should set the socket options', (done) => {
       localStorage.token = 'vvvv';
       authProvider.setSocketConnectionOptions({someSocketIoOption: 'value'});
       $auth.connect();

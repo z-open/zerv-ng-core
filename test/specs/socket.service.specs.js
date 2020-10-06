@@ -1,10 +1,6 @@
 describe('Unit testing for socket,', function() {
   let spec;
 
-  beforeEach(module('zerv.core', function($socketioProvider) {
-    $socketioProvider.setDebug(true);
-  }));
-
   beforeEach(function() {
     spec = {};
 
@@ -41,9 +37,15 @@ describe('Unit testing for socket,', function() {
       spec.notifyNetworkReconnection = fn; return _.noop;
     });
 
+    module('zerv.core', function($socketioProvider) {
+      $socketioProvider.setDebug(true);
+      spec.$socketioProvider = $socketioProvider;
+    });
+
     module(function($provide) {
       // $provide.value('$window', mock);
       $provide.value('$auth', mockAuthService);
+      spec.$auth = mockAuthService;
     });
 
     inject(function($injector, _$rootScope_, _$q_, _$timeout_) {
@@ -51,6 +53,39 @@ describe('Unit testing for socket,', function() {
       spec.$rootScope = _$rootScope_;
       spec.$q = _$q_;
       spec.$timeout = _$timeout_;
+    });
+  });
+
+  describe('setDefaultFetchTimeoutInSecs', () => {
+    it('should set a specific value', () => {
+      spec.$socketioProvider.setDefaultFetchTimeoutInSecs(60);
+      expect(spec.$socketioProvider.getDefaultFetchMaxTimeout()).toEqual(60);
+    });
+
+    it('should be set to default value', () => {
+      expect(spec.$socketioProvider.getDefaultFetchMaxTimeout()).toEqual(120);
+    });
+  });
+
+  describe('setDefaultMaxFetchAttempts', () => {
+    it('should set a specific value', () => {
+      spec.$socketioProvider.setDefaultMaxFetchAttempts(5);
+      expect(spec.$socketioProvider.getDefaultMaxFetchAttempts()).toEqual(5);
+    });
+
+    it('should be set to default value', () => {
+      expect(spec.$socketioProvider.getDefaultMaxFetchAttempts()).toEqual(3);
+    });
+  });
+
+  describe('setDefaultPostTimeoutInSecs', () => {
+    it('should set a specific value', () => {
+      spec.$socketioProvider.setDefaultPostTimeoutInSecs(60);
+      expect(spec.$socketioProvider.getDefaultPostMaxTimeout()).toEqual(60);
+    });
+
+    it('should be set to default value', () => {
+      expect(spec.$socketioProvider.getDefaultPostMaxTimeout()).toEqual(300);
     });
   });
 

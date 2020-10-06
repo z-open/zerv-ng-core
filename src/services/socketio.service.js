@@ -11,8 +11,9 @@ angular
 
 function socketioProvider() {
   let debug;
-  let defaultMaxAttempts;
-  let defaultTimeoutInSecs;
+  let defaultMaxFetchAttempts;
+  let defaultFetchTimeoutInSecs;
+  let defaultPostTimeoutInSecs;
   const transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {serialize: noop, deserialize: noop};
   function noop(v) {
     return v;
@@ -30,9 +31,9 @@ function socketioProvider() {
      *
      * @param {Number} value
      */
-  this.setDefaultMaxAttempts = (value) => {
-    defaultMaxAttempts = value !== 0 ? value : Infinity;
-    debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
+  this.setDefaultMaxFetchAttempts = (value) => {
+    defaultMaxFetchAttempts = value !== 0 ? value : Infinity;
+    debug && logDebug('set defaultMaxFetchAttempts to ' + defaultMaxFetchAttempts);
     return this;
   };
 
@@ -44,18 +45,35 @@ function socketioProvider() {
      *
      * @param {Number} value
      */
-  this.setDefaultTimeoutInSecs = (value) => {
-    defaultTimeoutInSecs = value !== 0 ? value : Infinity;
-    debug && logDebug('set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
+  this.setDefaultFetchTimeoutInSecs = (value) => {
+    defaultFetchTimeoutInSecs = value;
+    debug && logDebug('set defaultFetchTimeoutInSecs to ' + defaultFetchTimeoutInSecs);
     return this;
   };
 
-  this.getDefautMaxAttempts = () => defaultMaxAttempts;
+  /**
+     * Set the maximum time a post can take to complete before timing out
+     *
+     * Even though the fetch might be attempted mulitiple times meanwhile.
+     *
+     *
+     * @param {Number} value
+     */
+  this.setDefaultPostTimeoutInSecs = (value) => {
+    defaultPostTimeoutInSecs = value;
+    debug && logDebug('set defaultPostTimeoutInSecs to ' + defaultPostTimeoutInSecs);
+    return this;
+  };
 
-  this.getDefaultMaxTimeout = () => defaultTimeoutInSecs;
 
-  this.setDefaultMaxAttempts(3);
-  this.setDefaultTimeoutInSecs(120);
+  this.getDefaultMaxFetchAttempts = () => defaultMaxFetchAttempts;
+  this.getDefaultFetchMaxTimeout = () => defaultFetchTimeoutInSecs;
+  this.getDefaultPostMaxTimeout = () => defaultPostTimeoutInSecs;
+
+  this.setDefaultMaxFetchAttempts(3);
+  this.setDefaultFetchTimeoutInSecs(120);
+  this.setDefaultPostTimeoutInSecs(300);
+
 
   this.$get = function socketioService($rootScope, $q, $auth) {
     const service = {
@@ -102,8 +120,8 @@ function socketioProvider() {
          * @param {String} operation
          * @param {Object} data
          * @param {Object} options
-         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
          * @returns {Promise<Object} data received
          */
     function fetch(operation, data, options = {}) {
@@ -118,8 +136,8 @@ function socketioProvider() {
          * @param {String} operation
          * @param {Object} data
          * @param {Object} options
-         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
          * @returns {Promise<Object} data received
          */
     function notify(operation, data, options = {}) {
@@ -148,7 +166,7 @@ function socketioProvider() {
       // By default, there is hard coded timeout and trying only once to make sure the post ends at some point.
       // the calling function should deal with the retry
       // if the operation never returns or adjust the option with timeout/attempts.
-      options = _.assign({attempts: 1, timeout: 60 * 5}, options);
+      options = _.assign({attempts: 1, timeout: defaultPostTimeoutInSecs}, options);
       return service._socketEmit(operation, data, 'post', options);
     }
 
@@ -161,15 +179,15 @@ function socketioProvider() {
          * @param {String} operation
          * @param {Object} data
          * @param {Object} options
-         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+         * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+         * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
          * @returns {Promise<Object} data received
          */
     function _socketEmit(operation, data, type, options = {}) {
       const serialized = transport.serialize(data);
       const deferred = $q.defer();
-      const emitMaxAttempts = options.attempts || defaultMaxAttempts;
-      const emitTimeoutInSecs = options.timeout || defaultTimeoutInSecs;
+      const emitMaxAttempts = options.attempts || defaultMaxFetchAttempts;
+      const emitTimeoutInSecs = options.timeout || defaultFetchTimeoutInSecs;
       let listenerOff;
       const startTime = Date.now();
       let attemptNb = 1;

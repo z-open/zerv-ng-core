@@ -588,8 +588,9 @@
     var _this = this;
 
     var debug = void 0;
-    var defaultMaxAttempts = void 0;
-    var defaultTimeoutInSecs = void 0;
+    var defaultMaxFetchAttempts = void 0;
+    var defaultFetchTimeoutInSecs = void 0;
+    var defaultPostTimeoutInSecs = void 0;
     var transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {
       serialize: noop,
       deserialize: noop
@@ -612,9 +613,9 @@
        */
 
 
-    this.setDefaultMaxAttempts = function (value) {
-      defaultMaxAttempts = value !== 0 ? value : Infinity;
-      debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
+    this.setDefaultMaxFetchAttempts = function (value) {
+      defaultMaxFetchAttempts = value !== 0 ? value : Infinity;
+      debug && logDebug('set defaultMaxFetchAttempts to ' + defaultMaxFetchAttempts);
       return _this;
     };
     /**
@@ -627,22 +628,42 @@
        */
 
 
-    this.setDefaultTimeoutInSecs = function (value) {
-      defaultTimeoutInSecs = value !== 0 ? value : Infinity;
-      debug && logDebug('set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
+    this.setDefaultFetchTimeoutInSecs = function (value) {
+      defaultFetchTimeoutInSecs = value;
+      debug && logDebug('set defaultFetchTimeoutInSecs to ' + defaultFetchTimeoutInSecs);
+      return _this;
+    };
+    /**
+       * Set the maximum time a post can take to complete before timing out
+       *
+       * Even though the fetch might be attempted mulitiple times meanwhile.
+       *
+       *
+       * @param {Number} value
+       */
+
+
+    this.setDefaultPostTimeoutInSecs = function (value) {
+      defaultPostTimeoutInSecs = value;
+      debug && logDebug('set defaultPostTimeoutInSecs to ' + defaultPostTimeoutInSecs);
       return _this;
     };
 
-    this.getDefautMaxAttempts = function () {
-      return defaultMaxAttempts;
+    this.getDefaultMaxFetchAttempts = function () {
+      return defaultMaxFetchAttempts;
     };
 
-    this.getDefaultMaxTimeout = function () {
-      return defaultTimeoutInSecs;
+    this.getDefaultFetchMaxTimeout = function () {
+      return defaultFetchTimeoutInSecs;
     };
 
-    this.setDefaultMaxAttempts(3);
-    this.setDefaultTimeoutInSecs(120);
+    this.getDefaultPostMaxTimeout = function () {
+      return defaultPostTimeoutInSecs;
+    };
+
+    this.setDefaultMaxFetchAttempts(3);
+    this.setDefaultFetchTimeoutInSecs(120);
+    this.setDefaultPostTimeoutInSecs(300);
 
     this.$get = ["$rootScope", "$q", "$auth", function socketioService($rootScope, $q, $auth) {
       var service = {
@@ -687,8 +708,8 @@
            * @param {String} operation
            * @param {Object} data
            * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
            * @returns {Promise<Object} data received
            */
 
@@ -705,8 +726,8 @@
            * @param {String} operation
            * @param {Object} data
            * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
            * @returns {Promise<Object} data received
            */
 
@@ -745,7 +766,7 @@
 
         options = _.assign({
           attempts: 1,
-          timeout: 60 * 5
+          timeout: defaultPostTimeoutInSecs
         }, options);
         return service._socketEmit(operation, data, 'post', options);
       }
@@ -758,8 +779,8 @@
            * @param {String} operation
            * @param {Object} data
            * @param {Object} options
-           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxAttempts
-           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+           * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+           * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
            * @returns {Promise<Object} data received
            */
 
@@ -768,8 +789,8 @@
         var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
         var serialized = transport.serialize(data);
         var deferred = $q.defer();
-        var emitMaxAttempts = options.attempts || defaultMaxAttempts;
-        var emitTimeoutInSecs = options.timeout || defaultTimeoutInSecs;
+        var emitMaxAttempts = options.attempts || defaultMaxFetchAttempts;
+        var emitTimeoutInSecs = options.timeout || defaultFetchTimeoutInSecs;
         var listenerOff = void 0;
         var startTime = Date.now();
         var attemptNb = 1;
