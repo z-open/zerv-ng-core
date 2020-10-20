@@ -196,7 +196,7 @@
           deferred.resolve(socket);
         }
 
-        var acceptableDelay = void 0;
+        var acceptableDelay = null;
         var off = $rootScope.$on('user_connected', function () {
           off();
 
@@ -270,11 +270,11 @@
           $rootScope.$broadcast('user_disconnected'); // after the socket disconnect, socketio will reconnect the server automatically by default.
           // EXCEPT if the backend sends a disconnect.
           // Currently backend might send a disconnect
-          // - if the token is invalid (unauthorized) 
+          // - if the token is invalid (unauthorized)
           //   -> the onUnauthorized() function will be called as well
-          // - if the browser took too much time before requesting authentication (in socketio-jwt) 
+          // - if the browser took too much time before requesting authentication (in socketio-jwt)
           //   -> Not handled yet -> futur solution is logout/ clear token
-          // 
+          //
         }
 
         function onAuthenticated(refreshToken) {
@@ -397,10 +397,10 @@
         function requestNewTokenBeforeExpiration(payload) {
           clearNewTokenRequestTimeout();
           var expectancy = payload.dur; // if the network is lost just before the token is automatially refreshed
-          // but socketio reconnects before the token expired 
+          // but socketio reconnects before the token expired
           // a new token will be provided and session is maintained.
           // To revise:
-          // ---------- 
+          // ----------
           // Currently, each reconnection will return a new token
           // Later on, it might be better the backend returns a new token only when it gets closer to expiration
           // it seems a waste of resources (many token blacklisted by zerv-core when poor connection)
@@ -468,10 +468,10 @@
       monitor.start = function () {
         if (!monitor.started) {
           monitor.started = true;
-          document.addEventListener("mousemove", notifyUserActivity, false);
-          document.addEventListener("mousedown", notifyUserActivity, false);
-          document.addEventListener("keypress", notifyUserActivity, false);
-          document.addEventListener("touchmove", notifyUserActivity, false);
+          document.addEventListener('mousemove', notifyUserActivity, false);
+          document.addEventListener('mousedown', notifyUserActivity, false);
+          document.addEventListener('keypress', notifyUserActivity, false);
+          document.addEventListener('touchmove', notifyUserActivity, false);
           resetMonitor();
         }
       };
@@ -576,11 +576,11 @@
 "use strict";
 
 (function () {
-  /** 
+  /**
    * This service allows your application contact the websocket api.
-   * 
+   *
    * It will ensure that the connection is available and user is authenticated before fetching data.
-   * 
+   *
    */
   angular.module('zerv.core').provider('$socketio', socketioProvider);
 
@@ -588,8 +588,9 @@
     var _this = this;
 
     var debug = void 0;
-    var defaultMaxAttempts = void 0;
-    var defaultTimeoutInSecs = void 0;
+    var defaultMaxFetchAttempts = void 0;
+    var defaultFetchTimeoutInSecs = void 0;
+    var defaultPostTimeoutInSecs = void 0;
     var transport = window.ZJSONBIN && !window.ZJSONBIN.disabled ? window.ZJSONBIN : {
       serialize: noop,
       deserialize: noop
@@ -605,54 +606,76 @@
     };
     /**
      * Set how many attempts a fetch will happen by default
-     * 
-     * The number of attemps might not be reached during a fetch if the timeout kicks in first
-     * 
-     * @param {Number} value 
+     *
+     * The number of attempts might not be reached during a fetch if the timeout kicks in first
+     *
+     * @param {Number} value
      */
 
 
-    this.setDefaultMaxAttemps = function (value) {
-      defaultMaxAttempts = value !== 0 ? value : Infinity;
-      debug && logDebug('set defaultMaxAttempts to ' + defaultMaxAttempts);
+    this.setDefaultMaxFetchAttempts = function (value) {
+      defaultMaxFetchAttempts = value !== 0 ? value : Infinity;
+      debug && logDebug('set defaultMaxFetchAttempts to ' + defaultMaxFetchAttempts);
       return _this;
     };
     /**
-     * Set the maximum time a fetch can take to complete before timing out 
-     * 
+     * Set the maximum time a fetch can take to complete before timing out
+     *
      * Even though the fetch might be attempted mulitiple times meanwhile.
-     * 
-     * 
-     * @param {Number} value 
+     *
+     *
+     * @param {Number} value
      */
 
 
-    this.setDefaultTimeoutInSecs = function (value) {
-      defaultTimeoutInSecs = value !== 0 ? value : Infinity;
-      debug && logDebug('set defaultTimeoutInSecs to ' + defaultTimeoutInSecs);
+    this.setDefaultFetchTimeoutInSecs = function (value) {
+      defaultFetchTimeoutInSecs = value;
+      debug && logDebug('set defaultFetchTimeoutInSecs to ' + defaultFetchTimeoutInSecs);
+      return _this;
+    };
+    /**
+     * Set the maximum time a post can take to complete before timing out
+     *
+     * Even though the fetch might be attempted mulitiple times meanwhile.
+     *
+     *
+     * @param {Number} value
+     */
+
+
+    this.setDefaultPostTimeoutInSecs = function (value) {
+      defaultPostTimeoutInSecs = value;
+      debug && logDebug('set defaultPostTimeoutInSecs to ' + defaultPostTimeoutInSecs);
       return _this;
     };
 
-    this.getDefautMaxAttempts = function () {
-      return defaultMaxAttempts;
+    this.getDefaultMaxFetchAttempts = function () {
+      return defaultMaxFetchAttempts;
     };
 
-    this.getDefaultMaxTimeout = function () {
-      return defaultTimeoutInSecs;
+    this.getDefaultFetchMaxTimeout = function () {
+      return defaultFetchTimeoutInSecs;
     };
 
-    this.setDefaultMaxAttemps(3);
-    this.setDefaultTimeoutInSecs(120);
+    this.getDefaultPostMaxTimeout = function () {
+      return defaultPostTimeoutInSecs;
+    };
+
+    this.setDefaultMaxFetchAttempts(3);
+    this.setDefaultFetchTimeoutInSecs(120);
+    this.setDefaultPostTimeoutInSecs(300);
 
     this.$get = ["$rootScope", "$q", "$auth", function socketioService($rootScope, $q, $auth) {
-      return {
+      var service = {
         on: on,
         emit: emit,
         logout: $auth.logout,
         fetch: fetch,
         post: post,
-        notify: notify
-      }; // /////////////////
+        notify: notify,
+        _socketEmit: _socketEmit
+      };
+      return service; // /////////////////
 
       function on(eventName, callback) {
         $auth.connect().then(function (socket) {
@@ -679,14 +702,14 @@
         });
       }
       /**
-       * fetch data the way we call an api 
+       * fetch data the way we call an api
        * http://stackoverflow.com/questions/20685208/websocket-transport-reliability-socket-io-data-loss-during-reconnection
-       * 
-       * @param {String} operation 
-       * @param {Object} data 
-       * @param {Object} options 
-       * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
-       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
        * @returns {Promise<Object} data received
        */
 
@@ -696,33 +719,33 @@
         // it is very important to define the timeout
         // fetching lots of data might take time for some api call, timeout shoud be increased
         // after the timeout passes system will retry;
-        return socketEmit(operation, data, 'fetch', options);
+        return service._socketEmit(operation, data, 'fetch', options);
       }
       /**
        * notify is similar to fetch but more meaningful
-       * @param {String} operation 
-       * @param {Object} data 
-       * @param {Object} options 
-       * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
-       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
        * @returns {Promise<Object} data received
        */
 
 
       function notify(operation, data) {
         var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-        return socketEmit(operation, data, 'notify', options);
+        return service._socketEmit(operation, data, 'notify', options);
       }
       /**
        * post sends data to the server in order to modify data.
-       * 
+       *
        * There is no guarantee that the post made it to the server if it times out
        * Currenlty, this will not retry in case of network failure to avoid posting multiple times the same data.
-       * 
-       * @param {String} operation 
-       * @param {Object} data 
-       * @param {Object} options 
-       * @property {Number} options.attempts nb of attemps to try to emit, default to 1
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to 1
        * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to 300secs
        * @returns {Promise<Object} data received
        */
@@ -736,47 +759,50 @@
           return lowerCase.indexOf(kw) !== -1;
         })) {
           console.warn("IO(warn): " + operation + " seems to be a fetch, but function post is used. Modify operation name or use function fetch.");
-        } // By default, there is hard coded timeout and trying only once to make sure the post ends at some point.
-        // the calling function should deal with the retry
-        // if the operation never returns or adjust the option with timeout/attempts.
+        } // By default, there is hard coded timeout and the function tries only once to make sure the post ends at some point.
+        // the calling function should deal with the retry as data might have changed between calls.
+        // Otherwise, provide the max attempts to the function.
 
 
-        options = _.assign({
-          attempts: 1,
-          timeout: 60 * 5
-        }, options);
-        return socketEmit(operation, data, 'post', options);
+        options = {
+          attempts: options.attempts || 1,
+          timeout: options.timeout || defaultPostTimeoutInSecs
+        };
+        return service._socketEmit(operation, data, 'post', options);
       }
       /**
        * This function wraps the level socket emit function which is not re-emitting the data by itself currently.
-       * 
+       *
        * If the emit fails and option.attempts is set, it will retry as soon as the network detected available (with no wait time)
        * A timeout prevents to wait eternally if the network never comes back
-       * 
-       * @param {String} operation 
-       * @param {Object} data 
-       * @param {Object} options 
-       * @property {Number} options.attempts nb of attemps to try to emit, default to defaultMaxAttempts
-       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultTimeoutInSecs
+       *
+       * @param {String} operation
+       * @param {Object} data
+       * @param {Object} options
+       * @property {Number} options.attempts nb of attempts to try to emit, default to defaultMaxFetchAttempts
+       * @property {Number} options.timeout maximum time to execute all those attempts before giving up, default to defaultFetchTimeoutInSecs
        * @returns {Promise<Object} data received
        */
 
 
-      function socketEmit(operation, data, type) {
+      function _socketEmit(operation, data, type) {
         var options = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : {};
         var serialized = transport.serialize(data);
         var deferred = $q.defer();
-        var emitMaxAttempts = options.attempts || defaultMaxAttempts;
-        var emitTimeoutInSecs = options.timeout || defaultTimeoutInSecs;
+        var emitMaxAttempts = options.attempts || defaultMaxFetchAttempts;
+        var emitTimeoutInSecs = options.timeout || defaultFetchTimeoutInSecs;
         var listenerOff = void 0;
         var startTime = Date.now();
         var attemptNb = 1;
         var timeoutHandler = startTimeoutMonitoring(emitTimeoutInSecs);
         $auth // make sure socket is connected at least.
-        .connect().then(handleEmitAttempts) // if the connection layer could connect, no need to try emit at all.
+        .connect() // if the connection layer could connect, no need to try emit at all.
         // (Or could we rely on the emit timeout instead?)
-        .catch(onConnectionError);
+        .catch(onConnectionError) // otherwise emit
+        .then(handleEmitAttempts);
         return deferred.promise.finally(function () {
+          clearTimeout(timeoutHandler);
+
           if (listenerOff) {
             // there is no longer a need to listen for connection, since the promise completed
             listenerOff();
@@ -794,11 +820,11 @@
               code: result.code,
               description: result.data
             });
-          } // if socketemit times out, it usually means there is too much slowness (network) or UI or backend processing.
+          } // if _socketEmit times out, it usually means there is too much slowness (network) or UI or backend processing.
           // ex that can trigger timeout:
           // 1. ui execute socket emit and wait
           // 2. ui executes lots of processing (large loop, or many promises to get executed first)
-          // 3. then emit might NOT process the response due to step 2 taking too much time. socketEmit will timeout.
+          // 3. then emit might NOT process the response due to step 2 taking too much time. _socketEmit will timeout.
           // Note:
           // UI should warn the user that there is connectivity issue and should manually retry.
           // but at least the user would understand that the data might not be updated.
@@ -806,14 +832,11 @@
 
           return setTimeout(function () {
             var result = {
-              code: 'EMIT_TIMEOUT_ERR',
-              description: "Failed to emit [" + type + "/" + operation + "] or process response - Network or browser too busy - timed out after " + emitTimeoutInSecs + " and " + attemptNb + " attempt(s)"
+              code: 'NO_SERVER_RESPONSE_ERR',
+              description: "Failed to emit [" + type + "/" + operation + "] or process response - Network or browser too busy - timed out after " + emitTimeoutInSecs + " secs and " + attemptNb + " attempt(s)"
             };
             debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));
-            deferred.reject({
-              code: result.code,
-              description: result.data
-            });
+            deferred.reject(result);
           }, emitTimeoutInSecs * 1000);
         }
 
@@ -828,18 +851,15 @@
             listenerOff = $auth.addConnectionListener(function () {
               // system just reconnected
               // let's emit again
-              if (emitMaxAttempts > ++attemptNb) {
+              if (emitMaxAttempts >= ++attemptNb) {
                 emitData(socket);
               } else {
                 var result = {
-                  code: 'EMIT_RETRY_ERR',
-                  description: "Failed to emit to [" + type + "/" + operation + "] or process response - Made " + attemptNb + " attempt(s)"
+                  code: 'NO_SERVER_RESPONSE_ERR',
+                  description: "Failed to emit to [" + type + "/" + operation + "] or process response - Made " + emitMaxAttempts + " attempt(s)"
                 };
                 debug && logDebug("Error on [" + type + "/" + operation + "] ->" + JSON.stringify(result));
-                deferred.reject({
-                  code: result.code,
-                  description: result.data
-                });
+                deferred.reject(result);
               }
             });
           }
@@ -848,13 +868,13 @@
         }
 
         function onConnectionError(err) {
-          clearTimeout(timeoutHandler);
           var result = {
             code: 'CONNECTION_ERR',
             description: err
           };
           debug && logDebug("Error on  [" + type + "/" + operation + "] ->" + JSON.stringify(result));
           deferred.reject(result);
+          return Promise.reject(err);
         }
 
         function emitData(socket) {

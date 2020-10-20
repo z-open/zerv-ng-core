@@ -128,7 +128,7 @@ function authProvider() {
         function addConnectionListener(callback) {
             return addListener('connect', callback);
         };
-    
+
         function addDisconnectionListener(callback) {
             return addListener('disconnect', callback);
         };
@@ -180,7 +180,7 @@ function authProvider() {
             if (sessionUser.connected) {
                 deferred.resolve(socket);
             }
-            let acceptableDelay;
+            let acceptableDelay = null;
             const off = $rootScope.$on('user_connected', function() {
                 off();
                 if (acceptableDelay) {
@@ -209,7 +209,7 @@ function authProvider() {
             let tokenRequestTimeout, graceTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
             // and keep the connection alive
-            const connectOptions = _.assign( socketConnectionOptions || {}, 
+            const connectOptions = _.assign( socketConnectionOptions || {},
                 {
                     'forceNew': true,
                     // by default the socket will reconnect after any disconnection error (except if disconnect co
@@ -261,11 +261,11 @@ function authProvider() {
                 // after the socket disconnect, socketio will reconnect the server automatically by default.
                 // EXCEPT if the backend sends a disconnect.
                 // Currently backend might send a disconnect
-                // - if the token is invalid (unauthorized) 
+                // - if the token is invalid (unauthorized)
                 //   -> the onUnauthorized() function will be called as well
-                // - if the browser took too much time before requesting authentication (in socketio-jwt) 
+                // - if the browser took too much time before requesting authentication (in socketio-jwt)
                 //   -> Not handled yet -> futur solution is logout/ clear token
-                // 
+                //
             }
 
             function onAuthenticated(refreshToken) {
@@ -317,16 +317,16 @@ function authProvider() {
                     onUnauthorizedCallback(msg);
                 }
                 switch (msg) {
-                    case 'wrong_user':
-                        window.location.reload();
+                case 'wrong_user':
+                    window.location.reload();
+                    break;
+                case 'session_expired':
+                    if (onSessionExpirationCallback) {
+                        onSessionExpirationCallback();
                         break;
-                    case 'session_expired':
-                        if (onSessionExpirationCallback) {
-                            onSessionExpirationCallback();
-                            break;
-                        }
-                    default:
-                        redirectToLogin();
+                    }
+                default:
+                    redirectToLogin();
                 }
             }
 
@@ -379,10 +379,10 @@ function authProvider() {
                 clearNewTokenRequestTimeout();
                 const expectancy = payload.dur;
                 // if the network is lost just before the token is automatially refreshed
-                // but socketio reconnects before the token expired 
+                // but socketio reconnects before the token expired
                 // a new token will be provided and session is maintained.
                 // To revise:
-                // ---------- 
+                // ----------
                 // Currently, each reconnection will return a new token
                 // Later on, it might be better the backend returns a new token only when it gets closer to expiration
                 // it seems a waste of resources (many token blacklisted by zerv-core when poor connection)
@@ -427,12 +427,12 @@ function authProvider() {
 
     function createInactiveSessionMonitoring() {
         const maxInactiveTimeout = 7 * 24 * 60;
-        
+
         const monitor = {
             timeoutId: null,
             timeoutInMins: 0,
             started: false,
-            onTimeout: null
+            onTimeout: null,
         };
 
         // as soon as there is a user activity the timeout will be resetted but not more than once every sec.
@@ -448,10 +448,10 @@ function authProvider() {
         monitor.start = () => {
             if (!monitor.started) {
                 monitor.started = true;
-                document.addEventListener("mousemove", notifyUserActivity, false);
-                document.addEventListener("mousedown", notifyUserActivity, false);
-                document.addEventListener("keypress", notifyUserActivity, false);
-                document.addEventListener("touchmove", notifyUserActivity, false);     
+                document.addEventListener('mousemove', notifyUserActivity, false);
+                document.addEventListener('mousedown', notifyUserActivity, false);
+                document.addEventListener('keypress', notifyUserActivity, false);
+                document.addEventListener('touchmove', notifyUserActivity, false);
                 resetMonitor();
             }
         };
@@ -486,7 +486,7 @@ function authProvider() {
                 monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
             }
         };
-        
+
         function setMonitorTimeout() {
             const timeBeforeTimeout = monitor.getRemainingTime();
             if (timeBeforeTimeout <= 0) {
@@ -495,14 +495,14 @@ function authProvider() {
                 // still need to wait, user was active in another tab
                 // This tab must take in consideration the last activity
                 debug && console.debug(`AUTH(debug): User was active in another tab, wait ${timeBeforeTimeout/1000} secs more before timing out`);
-                monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);  
+                monitor.timeoutId = window.setTimeout(monitor._timeout, timeBeforeTimeout);
             }
         };
         return monitor;
     }
 
     function retrieveAuthCodeFromUrlOrTokenFromStorage() {
-        // token will alsway come last in the url if any.
+    // token will alsway come last in the url if any.
         let pos = window.location.href.indexOf('token=');
         if (pos !== -1) {
             const url = window.location.href.substring(0, pos);
@@ -525,9 +525,9 @@ function authProvider() {
         typeListeners[id] = callback;
         return () => {
             delete typeListeners[id];
-        }
+        };
     }
-    
+
     function notifyListeners(type, ...params) {
         _.forEach(listeners[type], (callback) => callback(...params));
     }

@@ -3,16 +3,15 @@ describe('Unit testing for auth,', () => {
     let $auth;
     let socket;
     let sessionUser;
-    let $q;
     let $timeout;
     let $rootScope;
     let authProvider;
     // user in token
-    let refreshTokenUser = { display: 'test1' };
-    let refreshedToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ";
+    const refreshTokenUser = {display: 'test1'};
+    const refreshedToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpZCI6IjIzMDkzNTJlLWM2OWItNDE4ZC04NTJiLTJiMTNkOGJiYjhhYiIsImRpc3BsYXkiOiJ0ZXN0MSIsImZpcnN0TmFtZSI6InRlc3QxIiwibGFzdE5hbWUiOiJ0ZXN0bDEiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE0NjQxMDM5ODEsImV4cCI6MTQ2NDEwNDI4MiwianRpIjoxLCJkdXIiOjMwMH0.TIiSzCth7ed7tZFyt5lpqLrYtkNQzsscB9Yv0hlvjEQ';
 
-    
-    beforeEach(module('zerv.core',function($authProvider){
+
+    beforeEach(module('zerv.core', function($authProvider) {
         authProvider = $authProvider;
         $authProvider.setDebug(true);
     }));
@@ -21,27 +20,24 @@ describe('Unit testing for auth,', () => {
         mockSocket();
         mockIo();
 
-        inject(function ($injector, _$rootScope_, _$q_, _$timeout_) {
+        inject(function($injector, _$rootScope_, _$q_, _$timeout_) {
             $auth = $injector.get('$auth');
             sessionUser = $injector.get('sessionUser');
             $rootScope = _$rootScope_;
             $q = _$q_;
             $timeout = _$timeout_;
         });
-        spyOn($auth,'redirect'); 
-
+        spyOn($auth, 'redirect');
     });
-    
-    
+
 
     afterEach(() => {
         window.localStorage.token = null;
     });
 
     describe('Connect', () => {
-
         it('should connect and store the new token and user', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect().finally(() => {
                 expect(localStorage.token).toEqual(refreshedToken);
                 expect(sessionUser.display).toEqual(refreshTokenUser.display);
@@ -49,26 +45,26 @@ describe('Unit testing for auth,', () => {
             });
             $rootScope.$apply();
             // fake server responding to the socket
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
+            socket.emit('connect');
+            socket.emit('authenticated', refreshedToken);
             $timeout.flush();
         });
 
         it('should connect using websocket as default transport', () => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect();
-            expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true, transports: [ 'websocket' ] });
+            expect(window.io.connect).toHaveBeenCalledWith({forceNew: true, transports: ['websocket']});
         });
 
         it('should connect using long polling as a preference to initiate socket', () => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             authProvider.enableLongPolling(true);
             $auth.connect();
-            expect(window.io.connect).toHaveBeenCalledWith({ forceNew: true });
+            expect(window.io.connect).toHaveBeenCalledWith({forceNew: true});
         });
 
         it('should not receive the connect at all and timeout', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect().catch((err) => {
                 expect(err).toEqual('USER_NOT_CONNECTED');
                 done();
@@ -78,20 +74,20 @@ describe('Unit testing for auth,', () => {
         });
 
         it('should connect but timeout because not receiving the authenticated acknowledgement', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect().catch((err) => {
                 expect(err).toEqual('USER_NOT_CONNECTED');
                 done();
             });
             $rootScope.$apply();
             // fake server responding to the socket
-            socket.emit("connect");
-            //socket.emit("authenticated", refreshedToken);
+            socket.emit('connect');
+            // socket.emit("authenticated", refreshedToken);
             $timeout.flush();
         });
 
         it('should already be connected if it connected before', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect().finally(() => {
                 $auth.connect().finally(() => {
                     done();
@@ -99,75 +95,70 @@ describe('Unit testing for auth,', () => {
             });
             $rootScope.$apply();
             // fake server responding to the socket
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
+            socket.emit('connect');
+            socket.emit('authenticated', refreshedToken);
             $timeout.flush();
         });
     });
 
     describe('logout', () => {
-
         it('should not call logout without connection', () => {
             $auth.logout();
             expect(socket.emit).not.toHaveBeenCalled();
         });
 
         it('should call emit logout then remove the token in local storage and redirect', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect().finally(() => {
-                 $auth.logout();
+                $auth.logout();
                 // //fake server responding..
                 socket.emit('logged_out');
                 expect( localStorage.token ).not.toBeDefined();
                 expect($auth.redirect).toHaveBeenCalled();
-          //      expect(window.location.replace).toHaveBeenCalled();
-                 done();
+                //      expect(window.location.replace).toHaveBeenCalled();
+                done();
             });
 
             $rootScope.$apply();
             // fake server responding to the socket
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
+            socket.emit('connect');
+            socket.emit('authenticated', refreshedToken);
             $timeout.flush();
         });
     });
 
     describe('setSocketConnectionOptions', () => {
-
-        it('setSocketConnectionOptions should set the socket options', (done) => {
-            localStorage.token = "vvvv";
+        it('should set the socket options', (done) => {
+            localStorage.token = 'vvvv';
             authProvider.setSocketConnectionOptions({someSocketIoOption: 'value'});
             $auth.connect();
-            expect( window.io.connect).toHaveBeenCalledWith({ someSocketIoOption: 'value', forceNew: true, transports: [ 'websocket' ] });
+            expect( window.io.connect).toHaveBeenCalledWith({someSocketIoOption: 'value', forceNew: true, transports: ['websocket']});
             done();
         });
 
         it('should be set to default value (when not called)', (done) => {
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
             $auth.connect();
-            expect( window.io.connect).toHaveBeenCalledWith({ forceNew: true, transports: [ 'websocket' ] });
+            expect( window.io.connect).toHaveBeenCalledWith({forceNew: true, transports: ['websocket']});
             done();
         });
-
     });
-    
+
 
     describe('User inactivity monitor', () => {
-        
         beforeEach(() => {
             jasmine.clock().install();
             jasmine.clock().mockDate();
             spyOn($auth, 'logout');
-            localStorage.token = "vvvv";
+            localStorage.token = 'vvvv';
         });
-    
+
         afterEach(() => {
             jasmine.clock().uninstall();
         });
-        
+
 
         describe('setInactiveSessionTimeoutInMins', () => {
-
             it('should set to logout after time of inactivity', () => {
                 $auth.setInactiveSessionTimeoutInMins(1);
                 connectSession();
@@ -226,7 +217,6 @@ describe('Unit testing for auth,', () => {
         });
 
         describe('reset', () => {
-
             beforeEach(() => {
                 $auth.setInactiveSessionTimeoutInMins(1);
                 connectSession();
@@ -286,33 +276,33 @@ describe('Unit testing for auth,', () => {
         function connectSession() {
             $auth.connect();
             $rootScope.$apply();
-            socket.emit("connect");
-            socket.emit("authenticated", refreshedToken);
+            socket.emit('connect');
+            socket.emit('authenticated', refreshedToken);
             $timeout.flush();
-        }        
+        }
     });
-    ////////////// HELPERS ///////////////////
+    // //////////// HELPERS ///////////////////
     function mockIo() {
         window.io = {
-            connect: jasmine.createSpy('ioConnect').and.callFake(() => socket)
+            connect: jasmine.createSpy('ioConnect').and.callFake(() => socket),
         };
     }
-    
+
     function mockSocket() {
         const socketListeners = {};
         socket = {
             emit: jasmine.createSpy('socketEmit'),
-            on: function (event, fn) {
-               // console.log("on: " + event);
+            on: function(event, fn) {
+                // console.log("on: " + event);
                 socketListeners[event] = fn;
                 return socket;
             },
-            connect: jasmine.createSpy('socketConnect')
-        }
+            connect: jasmine.createSpy('socketConnect'),
+        };
 
         socket.emit.and.callFake(
-            function (event, data, callback) {
-                console.log("emiting " + event);
+            function(event, data, callback) {
+                console.log('emiting ' + event);
                 if (socketListeners[event]) {
                     var r = socketListeners[event](data);
                     if (callback) {
