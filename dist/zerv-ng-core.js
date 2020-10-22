@@ -222,8 +222,7 @@
           return;
         }
 
-        var tokenRequestTimeout = void 0,
-            graceTimeout = void 0; // establish connection without passing the token (so that it is not visible in the log)
+        var tokenRequestTimeout = void 0; // establish connection without passing the token (so that it is not visible in the log)
         // and keep the connection alive
 
         var connectOptions = _.assign(socketConnectionOptions || {}, {
@@ -277,20 +276,23 @@
           //
         }
 
-        function onAuthenticated(refreshToken) {
-          userInactivityMonitor.start(); // the server confirmed that the token is valid...we are good to go
-
-          if (debug) {
-            console.debug('AUTH(debug): authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
-          }
-
-          localStorage.token = refreshToken; // identify origin for multi session
-
+        function onAuthenticated(refreshToken, ackFn) {
+          // identify origin for multi session
           if (!localStorage.origin) {
             localStorage.origin = refreshToken;
           }
 
-          var payload = decode(refreshToken);
+          var payload = decode(refreshToken); // the server confirmed that the token is valid...we are good to go
+
+          if (debug) {
+            // jti: is the number of times it was refreshed
+            console.debug("AUTH(debug): authenticated, received new token (jti:" + payload.jti + "): " + (refreshToken != localStorage.token) + ", currently connected: " + sessionUser.connected);
+          }
+
+          localStorage.token = refreshToken; // if the backend does not receive the acknowlegment due to network error (the token will not be revoked)
+          // the token can be still used until expiration and proper reconnection will happen (user will not be kicked out)
+
+          ackFn();
           setLoginUser(payload);
 
           if (!sessionUser.connected) {
@@ -306,6 +308,9 @@
             }
           }
 
+          userInactivityMonitor.start(function () {
+            notifyUserActivityToBackend(socket);
+          });
           requestNewTokenBeforeExpiration(payload);
         }
 
@@ -378,12 +383,6 @@
             }
 
             tokenRequestTimeout = null;
-
-            try {
-              $timeout.cancel(graceTimeout);
-            } catch (err) {
-              console.error('Clearing timeout error: ' + String(err));
-            }
           }
         }
 
@@ -409,7 +408,12 @@
 
           if (debug) {
             console.debug('AUTH(debug): Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
-          }
+          } // potential issue
+          // if there is logout initiated on one tab,
+          // but the other tab will not received the logout right away from server
+          // and might read the token during the refresh, keeping some tab logged in!
+          // could it be???
+
 
           tokenRequestTimeout = $timeout(function () {
             if (debug) {
@@ -425,15 +429,6 @@
               token: localStorage.token
             }); // Note: If communication crashes right after we emitted and before server sends back the token,
             // when the client reestablishes the connection, it might be able to authenticate if the token is still valid, otherwise we will be sent back to login.
-
-            var tokenToRefresh = localStorage.token; // this is the amount of time to retrieve the new token.
-
-            graceTimeout = $timeout(function () {
-              if (tokenToRefresh === localStorage.token) {
-                // The user session is ended if there is no valid toke
-                onUnauthorized('session_expired');
-              }
-            }, (expectancy - duration) * 1000);
           }, duration * 1000);
         }
       }
@@ -447,6 +442,109 @@
         service.redirect(url);
       }
     }];
+    /**
+    *
+    *
+    *
+    * sockets out perform http
+    when a tab detects an activity, it stores it in localStorage.lastActivity
+    so that other tab can recompute their timeout.
+    a webworker could have been better.
+    each time there is activity, it will be notified to web worker
+    when user closes the browser
+    the token is no longer refreshed but valid for its time.
+    if user reopen browser being inactive for more than the inactive session timeout
+    zimit should take user to sso
+    current the user can still go in since the token is valid even if not login in SSO
+    the session was inactive and should have expired.
+    solution using token expiration is not precised
+    ------------------------------------------------
+    token expiration is set to session inactive timeout SIT
+    if the user closes browser,
+    - since token is refreshed SIT of remaining time
+    to get a session, user must reopen browser between SIT / 2 and SIT
+    - if browser disconnect/close just before SIT/2, it must reconnect in that interval to keep session
+    if user is not active until right before SIT but then become active
+    and connection come back
+    the toke will have already expired
+    , user will get kicked out.
+    Seems the easiest solution
+    the more time a browser is disonnected the more chance the user has to get kick out on reconection.
+    the bad is quite a few token will be blacklisted.
+    in backend, read the session timeout from the tenant, a get method
+    on front end, be careful not have multiple tabs asking for refresh.
+    use same monitoring strategy than session inactive timeout for all tabs to try to sync at the same time
+    but only one send the token.
+    SIT/3 might be better.
+    session inactive timeout is not to confuse with app auto lock.
+    solution using active signal (work on both ends)
+    -----------------------------
+    when user is active, send msg every minute
+    backend update last time of activity in the global session
+    if disconnected (by network failure) or browser closed, msg is not sent
+    when the browser is reopen or reconnect
+    and if the token is still valid (token expiration should 2 times SIT)
+    find if there is an active session
+    if yes, check the last time it was active
+    if longer than SIT, then black list token for time more than active session timeout
+    and logout
+    Question
+    if the user has closed all the browser tabs, why do we keep the session active based on session timeout? let's close the session after a while, user is gone.
+    when socket close is received, store in global sessionId close time
+    if the browser has lost connection, how long should we keep the session valid?
+    connection might come back anytime, if the token expires, and connection returns, user will get kicked out
+    with no connection cannot work.
+    HOW TO BLACKLIST A VALID TOKEN AFTER DETECTING INACTIVITY (NO SOCKET CONNECTION) ON SERVER
+    IF THERE IS NO OTHER LOCAL SESSION ON OTHER SERVER WITH THIS TOKEN
+    solution
+    if user closes the browser
+    if browser gets disconnected
+    ???
+    token refresh form one tab.
+    BEST?
+    With http, when the request is made server returns result or session timeout.
+    with socket,
+    other Solution
+    --------
+    when the user uses a token
+    if blacklisted then
+    deny
+    check if the token is  the initial token (token auth code, which would not have a global session)
+    authenticate, create local and global session
+    else
+    if global session does NOT exists,
+        // weird the token should have been black list
+        deny
+    else
+        //check the last update (UI sends update)
+        if last update is after session inactive timeout
+            then reject and black list and remove global session
+            PRBL the session will be available even though no browser tab is opened.
+         else
+            allow
+    Solution
+    ---------
+    1. when the user closes the browser or all tabs manually
+    save in the global session when the last one was closed but remove when a new tab is opened (new connection)
+    when user tries to reconnect with a still valid token
+    if the global session exists and the last tab close was X minutes ago, black list and reject
+    this is nice because we can release the session quickly, knowning that the user intently closed zimit.
+    2. the user did not close the tabs but the network is gone or computer crashed (no way to know)
+    when computer reconnect with a still valid token
+    if a global session exits and was not updated recently, then reject and blacklist, remove session
+    the session will remain available for up to the session inactive timeout duration when the network is disconnected
+    */
+
+
+    function notifyUserActivityToBackend(socket) {
+      var lastNotif = Number(localStorage.lastNu || 0);
+      var now = Date.now() / 1000;
+
+      if (now - lastNotif >= 30) {
+        localStorage.lastNu = now;
+        socket.emit('activity');
+      }
+    }
 
     function createInactiveSessionMonitoring() {
       var maxInactiveTimeout = 7 * 24 * 60;
@@ -460,13 +558,15 @@
       var notifyUserActivity = _.throttle(function () {
         debug && console.debug('AUTH(debug): User activity detected');
         resetMonitor();
+        monitor.onActivityDetected();
       }, 1000, {
         leading: true,
         trailing: false
       });
 
-      monitor.start = function () {
+      monitor.start = function (onActivityDetected) {
         if (!monitor.started) {
+          monitor.onActivityDetected = onActivityDetected;
           monitor.started = true;
           document.addEventListener('mousemove', notifyUserActivity, false);
           document.addEventListener('mousedown', notifyUserActivity, false);
@@ -505,7 +605,7 @@
         window.clearTimeout(monitor.timeoutId);
 
         if (monitor.timeoutInMins !== 0) {
-          debug && console.debug('AUTH(debug): User inactivity timeout resetted');
+          debug && console.debug("AUTH(debug): User inactivity timeout resetted to " + monitor.timeoutInMins + " mins.");
           monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
         }
       }

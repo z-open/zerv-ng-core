@@ -304,7 +304,7 @@ describe('Unit testing for auth,', () => {
             function(event, data, callback) {
                 console.log('emiting ' + event);
                 if (socketListeners[event]) {
-                    var r = socketListeners[event](data);
+                    var r = socketListeners[event](data, () => {});
                     if (callback) {
                         callback(r);
                     }
