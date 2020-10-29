@@ -206,7 +206,7 @@ function authProvider() {
                 // already called...
                 return;
             }
-            let tokenRequestTimeout, graceTimeout;
+            let tokenRequestTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
             // and keep the connection alive
             const connectOptions = _.assign( socketConnectionOptions || {},
@@ -268,20 +268,23 @@ function authProvider() {
                 //
             }
 
-            function onAuthenticated(refreshToken) {
-                userInactivityMonitor.start();
-
-                // the server confirmed that the token is valid...we are good to go
-                if (debug) {
-                    console.debug('AUTH(debug): authenticated, received new token: ' + (refreshToken != localStorage.token) + ', currently connected: ' + sessionUser.connected);
-                }
-                localStorage.token = refreshToken;
-
+            function onAuthenticated(refreshToken, ackFn) {
                 // identify origin for multi session
                 if (!localStorage.origin) {
                     localStorage.origin = refreshToken;
                 }
                 const payload = decode(refreshToken);
+
+                // the server confirmed that the token is valid...we are good to go
+                if (debug) {
+                    // jti: is the number of times it was refreshed
+                    console.debug(`AUTH(debug): authenticated, received new token (jti:${payload.jti}): ${refreshToken != localStorage.token}, currently connected: ${sessionUser.connected}`);
+                }
+                localStorage.token = refreshToken;
+                // if the backend does not receive the acknowlegment due to network error (the token will not be revoked)
+                // the token can be still used until expiration and proper reconnection will happen (user will not get kicked out)
+                ackFn();
+
                 setLoginUser(payload);
 
                 if (!sessionUser.connected) {
@@ -295,7 +298,12 @@ function authProvider() {
                         $rootScope.$broadcast('user_reconnected', sessionUser);
                     }
                 }
-                requestNewTokenBeforeExpiration(payload);
+
+                userInactivityMonitor.start(() => {
+                    notifyUserActivityToBackend(socket);
+                });
+
+                scheduleRefreshToken(payload);
             }
 
             function onLogOut() {
@@ -359,12 +367,6 @@ function authProvider() {
                     }
 
                     tokenRequestTimeout = null;
-
-                    try {
-                        $timeout.cancel(graceTimeout);
-                    } catch (err) {
-                        console.error('Clearing timeout error: ' + String(err));
-                    }
                 }
             }
 
@@ -375,21 +377,17 @@ function authProvider() {
                 return payload;
             }
 
-            function requestNewTokenBeforeExpiration(payload) {
+            function scheduleRefreshToken(payload) {
                 clearNewTokenRequestTimeout();
-                const expectancy = payload.dur;
-                // if the network is lost just before the token is automatially refreshed
-                // but socketio reconnects before the token expired
-                // a new token will be provided and session is maintained.
-                // To revise:
-                // ----------
-                // Currently, each reconnection will return a new token
-                // Later on, it might be better the backend returns a new token only when it gets closer to expiration
-                // it seems a waste of resources (many token blacklisted by zerv-core when poor connection)
-                const duration = (expectancy * 50 / 100) | 0;
+                // To revise later on :
+                // --------------------
+                // Rare but all tabs might refresh a token at the same time.
+                // risk to get kicked out!
+                const duration = payload.dur;
                 if (debug) {
-                    console.debug('AUTH(debug): Schedule to request a new token in ' + duration + ' seconds (token duration:' + expectancy + ')');
+                    console.debug('AUTH(debug): Schedule to request a new token in ' + duration );
                 }
+
                 tokenRequestTimeout = $timeout(function() {
                     if (debug) {
                         console.debug('AUTH(debug): Time to request new token');
@@ -398,19 +396,9 @@ function authProvider() {
                     if (!localStorage.token) {
                         onUnauthorized('Token no longer available');
                     }
-
                     socket.emit('authenticate', {token: localStorage.token});
                     // Note: If communication crashes right after we emitted and before server sends back the token,
                     // when the client reestablishes the connection, it might be able to authenticate if the token is still valid, otherwise we will be sent back to login.
-
-                    const tokenToRefresh = localStorage.token;
-                    // this is the amount of time to retrieve the new token.
-                    graceTimeout = $timeout(function() {
-                        if (tokenToRefresh === localStorage.token) {
-                            // The user session is ended if there is no valid toke
-                            onUnauthorized('session_expired');
-                        }
-                    }, (expectancy - duration) * 1000);
                 }, duration * 1000);
             }
         }
@@ -424,6 +412,15 @@ function authProvider() {
             service.redirect(url);
         }
     };
+
+    function notifyUserActivityToBackend(socket) {
+        const lastNotif = Number(localStorage.lastNu || 0);
+        const now = Date.now() / 1000;
+        if ( now - lastNotif >= 30) {
+            localStorage.lastNu = now;
+            socket.emit('activity');
+        }
+    }
 
     function createInactiveSessionMonitoring() {
         const maxInactiveTimeout = 7 * 24 * 60;
@@ -440,13 +437,15 @@ function authProvider() {
             () => {
                 debug && console.debug('AUTH(debug): User activity detected');
                 resetMonitor();
+                monitor.onActivityDetected();
             },
             1000,
             {leading: true, trailing: false}
         );
 
-        monitor.start = () => {
+        monitor.start = (onActivityDetected) => {
             if (!monitor.started) {
+                monitor.onActivityDetected = onActivityDetected;
                 monitor.started = true;
                 document.addEventListener('mousemove', notifyUserActivity, false);
                 document.addEventListener('mousedown', notifyUserActivity, false);
@@ -482,7 +481,7 @@ function authProvider() {
             localStorage.lastActivity = Date.now();
             window.clearTimeout(monitor.timeoutId);
             if (monitor.timeoutInMins !== 0) {
-                debug && console.debug('AUTH(debug): User inactivity timeout resetted');
+                debug && console.debug(`AUTH(debug): User inactivity timeout resetted to ${monitor.timeoutInMins} mins.`);
                 monitor.timeoutId = window.setTimeout(setMonitorTimeout, monitor.timeoutInMins * 60000);
             }
         };
