@@ -139,6 +139,43 @@ describe('Unit testing for auth,', () => {
             socket.emit('authenticated', refreshedToken);
             $timeout.flush();
         });
+
+        it('should reconnect after a disconnect', (done) => {
+            $auth.connect().finally(() => {
+                expect(socket.emit.calls.allArgs()).toEqual([
+                    ['connect'],
+                    ['authenticate', Object({token: 'vvv', origin: null})],
+                    ['authenticated', 'aTokenDecodedByTheMock'],
+                ]);
+                // emit a disconnect from the socket layer
+                socket.emit('disconnect', 'ping timeout');
+                // socket io would by default reconnect internally
+                socket.emit('connect');
+                // and send the backend would send a new token if needed
+                socket.emit('authenticated', 'newToken');
+
+                expect(socket.callback).toHaveBeenCalledTimes(2);
+
+                expect(_.takeRight(socket.emit.calls.allArgs(), 4)).toEqual([
+                    ['disconnect', 'ping timeout'],
+                    ['connect'],
+                    // since the connection was established, the source of the connection is known (all tabs would use the same source)
+                    ['authenticate', Object({token: 'aTokenDecodedByTheMock', origin: 'aTokenDecodedByTheMock'})],
+                    // server sent a new token in this case;
+                    ['authenticated', 'newToken'],
+                ]);
+
+                expect(localStorage.token).toEqual('newToken');
+                expect(localStorage.origin).toEqual(refreshedToken);
+
+                done();
+            });
+            $rootScope.$apply();
+            // fake server responding to the socket
+            socket.emit('connect');
+            socket.emit('authenticated', refreshedToken);
+            $timeout.flush();
+        });
     });
 
     describe('logout', () => {
@@ -160,7 +197,7 @@ describe('Unit testing for auth,', () => {
                     // the logout provide the token to the backend
                     ['logout', 'aTokenDecodedByTheMock'],
                 ]);
-                jasmine.clock().tick(5000);
+                jasmine.clock().tick(1500);
                 expect($auth.redirect).toHaveBeenCalledTimes(1);
                 expect($auth.redirect).toHaveBeenCalledWith('http://mydomain/logoutPage');
                 done();
@@ -187,7 +224,7 @@ describe('Unit testing for auth,', () => {
                     // Received from the backend
                     ['logged_out'],
                 ]);
-                jasmine.clock().tick(5000);
+                jasmine.clock().tick(1500);
                 expect($auth.redirect).toHaveBeenCalledTimes(1);
                 expect($auth.redirect).toHaveBeenCalledWith('http://mydomain/logoutPage');
                 done();
@@ -215,7 +252,7 @@ describe('Unit testing for auth,', () => {
                     ['logout', 'aTokenDecodedByTheMock'],
                     ['logged_out'],
                 ]);
-                jasmine.clock().tick(5000);
+                jasmine.clock().tick(1500);
                 expect($auth.redirect).toHaveBeenCalledTimes(1);
                 expect($auth.redirect).toHaveBeenCalledWith('http://mydomain/logoutPage');
                 done();

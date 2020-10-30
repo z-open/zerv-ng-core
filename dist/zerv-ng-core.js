@@ -503,7 +503,7 @@
 
         setTimeout(function () {
           service.redirect(url);
-        }, 5000);
+        }, 1500);
       }
 
       function redirect(url) {

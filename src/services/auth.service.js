@@ -479,7 +479,7 @@ function authProvider() {
             // if the network is disconnected, the redirect will not work.
             setTimeout(() => {
                 service.redirect(url);
-            }, 5000);
+            }, 1500);
         }
 
         function redirect(url) {
