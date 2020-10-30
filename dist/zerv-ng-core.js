@@ -34,12 +34,12 @@
   function authProvider() {
     var _this = this;
 
-    var loginUrl = void 0,
-        logoutUrl = void 0,
-        debug = void 0,
-        reconnectionMaxTime = 15,
-        onSessionExpirationCallback = void 0,
-        onUnauthorizedCallback = void 0;
+    var loginUrl = void 0;
+    var logoutUrl = void 0;
+    var debug = void 0;
+    var reconnectionMaxTime = 15;
+    var onSessionExpirationCallback = void 0;
+    var onUnauthorizedCallback = void 0;
     var longPolling = false;
     var socketConnectionOptions = void 0;
     var listeners = {};
@@ -106,10 +106,11 @@
       return this;
     };
 
-    this.$get = ["$rootScope", "$location", "$timeout", "$q", "$window", function ($rootScope, $location, $timeout, $q, $window) {
+    this.$get = ["$rootScope", "$timeout", "$q", "$window", function ($rootScope, $timeout, $q, $window) {
       var socket = void 0;
       var tokenRequestTimeout = void 0;
       var activeSessionTimeout = void 0;
+      var loggingOut = void 0;
       var userSession = {
         connected: false,
         initialConnection: null,
@@ -280,7 +281,7 @@
 
           socket.emit('authenticate', {
             token: localStorage.token,
-            origin: localStorage.origin
+            origin: localStorage.origin || null
           }); // send the jwt
         }
 
@@ -315,7 +316,7 @@
           localStorage.token = refreshToken; // if the backend does not receive the acknowlegment due to network error (the token will not be revoked)
           // the token can be still used until expiration and proper reconnection will happen (user will not get kicked out)
 
-          ackFn();
+          ackFn('OK');
           setLoginUser(payload);
           monitorActiveSessionTimeout();
 
@@ -353,7 +354,7 @@
 
             activeSessionTimeout = setTimeout(function () {
               console.debug('AUTH(debug): Session is expired. Logging out...');
-              service.logout();
+              service.logout('session_expired');
             }, remainingActiveSessionTime);
           }
         }
@@ -452,10 +453,14 @@
       }
 
       function onLogOut() {
-        clearNewTokenRequestTimeout(); // token is no longer available.
-        // delete localStorage.token;
-        // delete localStorage.origin;
+        if (loggingOut) {
+          // the logout has already started
+          // initiated by the client or the server
+          return;
+        }
 
+        loggingOut = true;
+        clearNewTokenRequestTimeout();
         setConnectionStatus(false, 'logged out');
         service.exitToUrl(logoutUrl || loginUrl);
       }

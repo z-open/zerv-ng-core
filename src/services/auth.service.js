@@ -28,7 +28,12 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onUnauthorizedCallback;
+    let loginUrl;
+    let logoutUrl;
+    let debug;
+    let reconnectionMaxTime = 15;
+    let onSessionExpirationCallback;
+    let onUnauthorizedCallback;
     let longPolling = false;
     let socketConnectionOptions;
     const listeners = {};
@@ -97,11 +102,11 @@ function authProvider() {
         return this;
     };
 
-    this.$get = function($rootScope, $location, $timeout, $q, $window) {
+    this.$get = function($rootScope, $timeout, $q, $window) {
         let socket;
         let tokenRequestTimeout;
         let activeSessionTimeout;
-
+        let loggingOut;
 
         const userSession = {
             connected: false,
@@ -270,7 +275,7 @@ function authProvider() {
                 setConnectionStatus(false, 'Authenticating');
                 // the socket is connected, time to pass the auth code or current token to authenticate asap
                 // because if it expires, user will have to relog in
-                socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin}); // send the jwt
+                socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin || null}); // send the jwt
             }
 
             function onDisconnect(reason) {
@@ -304,7 +309,7 @@ function authProvider() {
                 localStorage.token = refreshToken;
                 // if the backend does not receive the acknowlegment due to network error (the token will not be revoked)
                 // the token can be still used until expiration and proper reconnection will happen (user will not get kicked out)
-                ackFn();
+                ackFn('OK');
 
                 setLoginUser(payload);
                 monitorActiveSessionTimeout();
@@ -341,7 +346,7 @@ function authProvider() {
                     }
                     activeSessionTimeout = setTimeout(() => {
                         console.debug('AUTH(debug): Session is expired. Logging out...');
-                        service.logout();
+                        service.logout('session_expired');
                     }, remainingActiveSessionTime);
                 }
             }
@@ -427,10 +432,13 @@ function authProvider() {
         }
 
         function onLogOut() {
+            if (loggingOut) {
+                // the logout has already started
+                // initiated by the client or the server
+                return;
+            }
+            loggingOut = true;
             clearNewTokenRequestTimeout();
-            // token is no longer available.
-            // delete localStorage.token;
-            // delete localStorage.origin;
             setConnectionStatus(false, 'logged out');
             service.exitToUrl(logoutUrl || loginUrl);
         }
