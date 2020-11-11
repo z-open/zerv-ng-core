@@ -28,7 +28,12 @@ angular
     .provider('$auth', authProvider);
 
 function authProvider() {
-    let loginUrl, logoutUrl, debug, reconnectionMaxTime = 15, onSessionExpirationCallback, onUnauthorizedCallback;
+    let loginUrl;
+    let logoutUrl;
+    let debug;
+    let reconnectionMaxTime = 15;
+    let onSessionExpirationCallback;
+    let onUnauthorizedCallback;
     let longPolling = false;
     let socketConnectionOptions;
     const listeners = {};
@@ -72,6 +77,11 @@ function authProvider() {
         return this;
     };
 
+    this.onSessionTerminated = function(callback) {
+        addListener('sessionTerminated', callback);
+        return this;
+    };
+
     this.onUnauthorized = function(callback) {
         onUnauthorizedCallback = callback;
         return this;
@@ -92,10 +102,13 @@ function authProvider() {
         return this;
     };
 
-    this.$get = function($rootScope, $location, $timeout, $q, $window) {
+    this.$get = function($rootScope, $timeout, $q, $window) {
         let socket;
+        let tokenRequestTimeout;
+        let activeSessionTimeout;
+        let loggingOut;
 
-        const sessionUser = {
+        const userSession = {
             connected: false,
             initialConnection: null,
             lastConnection: null,
@@ -113,11 +126,16 @@ function authProvider() {
             connect,
             logout,
             getSessionUser,
+            exitToUrl,
             redirect,
             setInactiveSessionTimeoutInMins: userInactivityMonitor.setTimeoutInMins,
+            getInactiveSessionTimeoutInMins: userInactivityMonitor.getTimeoutInMins,
             getRemainingInactiveTime: userInactivityMonitor.getRemainingTime,
+            getRemainingActiveTime,
             addConnectionListener,
             addDisconnectionListener,
+            addSessionTerminatedListener,
+            decodeToken,
         };
 
         userInactivityMonitor.onTimeout = () => service.logout('inactive_session_timeout');
@@ -133,9 +151,13 @@ function authProvider() {
             return addListener('disconnect', callback);
         };
 
+        function addSessionTerminatedListener(callback) {
+            return addListener('sessionTerminated', callback);
+        };
+
         function getSessionUser() {
             // the object will have the user information when the connection is established. Otherwise its connection property will be false;
-            return sessionUser;
+            return userSession;
         }
 
         /**
@@ -151,16 +173,21 @@ function authProvider() {
 
         function logout() {
             // connection could be lost during logout..so it could mean we have not logout on server side.
+            // backend will logged out on inactivity anyway
             if (socket) {
                 socket.emit('logout', localStorage.token);
             }
+            // let's keep logging out on the front end anyway
+            // get it rid of the session state data
+            // so that it cannot be reused to gain access.
+            onLogOut();
         }
 
         function getForValidConnection() {
             const deferred = $q.defer();
             // The socket might be no longer physically connected
             // but since the PING PONG has not happened yet, it is believed to be connected.
-            if (sessionUser.connected) {
+            if (userSession.connected) {
                 deferred.resolve(socket);
             } else {
                 // In this case, it is obvious that the connection was lost.
@@ -177,7 +204,7 @@ function authProvider() {
         function reconnect() {
             const deferred = $q.defer();
 
-            if (sessionUser.connected) {
+            if (userSession.connected) {
                 deferred.resolve(socket);
             }
             let acceptableDelay = null;
@@ -206,7 +233,6 @@ function authProvider() {
                 // already called...
                 return;
             }
-            let tokenRequestTimeout;
             // establish connection without passing the token (so that it is not visible in the log)
             // and keep the connection alive
             const connectOptions = _.assign( socketConnectionOptions || {},
@@ -249,7 +275,7 @@ function authProvider() {
                 setConnectionStatus(false, 'Authenticating');
                 // the socket is connected, time to pass the auth code or current token to authenticate asap
                 // because if it expires, user will have to relog in
-                socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin}); // send the jwt
+                socket.emit('authenticate', {token: localStorage.token, origin: localStorage.origin || null}); // send the jwt
             }
 
             function onDisconnect(reason) {
@@ -273,29 +299,30 @@ function authProvider() {
                 if (!localStorage.origin) {
                     localStorage.origin = refreshToken;
                 }
-                const payload = decode(refreshToken);
+                const payload = service.decodeToken(refreshToken);
 
                 // the server confirmed that the token is valid...we are good to go
                 if (debug) {
                     // jti: is the number of times it was refreshed
-                    console.debug(`AUTH(debug): authenticated, received new token (jti:${payload.jti}): ${refreshToken != localStorage.token}, currently connected: ${sessionUser.connected}`);
+                    console.debug(`AUTH(debug): authenticated, received new token (jti:${payload.jti}): ${refreshToken != localStorage.token}, currently connected: ${userSession.connected}`);
                 }
                 localStorage.token = refreshToken;
                 // if the backend does not receive the acknowlegment due to network error (the token will not be revoked)
                 // the token can be still used until expiration and proper reconnection will happen (user will not get kicked out)
-                ackFn();
+                ackFn('OK');
 
                 setLoginUser(payload);
+                monitorActiveSessionTimeout();
 
-                if (!sessionUser.connected) {
+                if (!userSession.connected) {
                     setConnectionStatus(true);
-                    $rootScope.$broadcast('user_connected', sessionUser);
-                    if (!sessionUser.initialConnection) {
-                        sessionUser.initialConnection = new Date();
+                    $rootScope.$broadcast('user_connected', userSession);
+                    if (!userSession.initialConnection) {
+                        userSession.initialConnection = new Date();
                     } else {
-                        sessionUser.lastConnection = new Date();
-                        sessionUser.connectionErrors++;
-                        $rootScope.$broadcast('user_reconnected', sessionUser);
+                        userSession.lastConnection = new Date();
+                        userSession.connectionErrors++;
+                        $rootScope.$broadcast('user_reconnected', userSession);
                     }
                 }
 
@@ -306,13 +333,22 @@ function authProvider() {
                 scheduleRefreshToken(payload);
             }
 
-            function onLogOut() {
-                clearNewTokenRequestTimeout();
-                // token is no longer available.
-                delete localStorage.token;
-                delete localStorage.origin;
-                setConnectionStatus(false, 'logged out');
-                service.redirect(logoutUrl || loginUrl);
+            function monitorActiveSessionTimeout() {
+                if (!activeSessionTimeout) {
+                    // if the client does not have the proper time, the logout initiated from the client side might be off (too early or too late)
+                    let remainingActiveSessionTime = service.getRemainingActiveTime();
+                    if (remainingActiveSessionTime < 0) {
+                        remainingActiveSessionTime = 5000;
+                        // let's give a few seconds, so that developer can check the console
+                        // and understand that there is an issue with the time
+                        // anyway the server tracks the time as well and will log out the user at proper time as well
+                        console.error('AUTH(error): Client machine time might be off');
+                    }
+                    activeSessionTimeout = setTimeout(() => {
+                        console.debug('AUTH(debug): Session is expired. Logging out...');
+                        service.logout('session_expired');
+                    }, remainingActiveSessionTime);
+                }
             }
 
             function onUnauthorized(msg) {
@@ -329,6 +365,7 @@ function authProvider() {
                     window.location.reload();
                     break;
                 case 'session_expired':
+                    // wrong!!!
                     if (onSessionExpirationCallback) {
                         onSessionExpirationCallback();
                         break;
@@ -338,43 +375,19 @@ function authProvider() {
                 }
             }
 
-            function setConnectionStatus(connected, reason) {
-                if (debug) {
-                    console.debug('AUTH(debug): Session Status: ' + (connected ? 'connected' : 'disconnected(' + reason + ')'));
-                }
-                if (sessionUser.connected !== connected) {
-                    sessionUser.connected = connected;
-                    if (connected) {
-                        notifyListeners('connect', sessionUser);
-                    } else {
-                        notifyListeners('disconnect', sessionUser);
-                    }
-                }
-            }
-
             function setLoginUser(payload) {
-                return _.assign(sessionUser, payload);
-            }
+                let sessionRange = null;
+                if (userSession.iat !== payload.iat || userSession.exp !== payload.exp) {
+                    sessionRange = {
+                        sessionStart: new Date(payload.iat * 1000),
+                        sessionEnd: new Date(payload.exp * 1000),
+                        sessionDuration: payload.exp - payload.iat,
+                    };
 
-            function clearNewTokenRequestTimeout() {
-                if (tokenRequestTimeout) {
-                    // Avoid the angular $timeout error issue defined here:
-                    // https://github.com/angular/angular.js/blob/master/CHANGELOG.md#timeout-due-to
-                    try {
-                        $timeout.cancel(tokenRequestTimeout);
-                    } catch (err) {
-                        console.error('Clearing timeout error: ' + String(err));
-                    }
-
-                    tokenRequestTimeout = null;
+                    console.debug(`AUTH(debug): User session started on ${sessionRange.sessionStart} and will end on ${sessionRange.sessionEnd} - duration: ${(sessionRange.sessionDuration / 60).toFixed(1)} min(s)`);
                 }
-            }
-
-            function decode(token) {
-                const base64Url = token.split('.')[1];
-                const base64 = base64Url.replace('-', '+').replace('_', '/');
-                const payload = JSON.parse($window.atob(base64));
-                return payload;
+                _.assign(userSession, payload, sessionRange);
+                return userSession;
             }
 
             function scheduleRefreshToken(payload) {
@@ -403,13 +416,79 @@ function authProvider() {
             }
         }
 
+        function decodeToken(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace('-', '+').replace('_', '/');
+            const payload = JSON.parse($window.atob(base64));
+            return payload;
+        }
+
+        function getRemainingActiveTime() {
+            // session has not received any token data yet.
+            if (!userSession.exp) {
+                return null;
+            }
+            return (userSession.exp * 1000) - Date.now();
+        }
+
+        function onLogOut() {
+            if (loggingOut) {
+                // the logout has already started
+                // initiated by the client or the server
+                return;
+            }
+            loggingOut = true;
+            clearNewTokenRequestTimeout();
+            setConnectionStatus(false, 'logged out');
+            service.exitToUrl(logoutUrl || loginUrl);
+        }
+
+        function setConnectionStatus(connected, reason) {
+            if (userSession.connected !== connected) {
+                if (debug) {
+                    console.debug('AUTH(debug): Session Status: ' + (connected ? 'connected' : 'disconnected(' + reason + ')'));
+                }
+                userSession.connected = connected;
+                if (connected) {
+                    notifyListeners('connect', userSession);
+                } else {
+                    notifyListeners('disconnect', userSession);
+                }
+            }
+        }
+
+        function clearNewTokenRequestTimeout() {
+            if (tokenRequestTimeout) {
+                // Avoid the angular $timeout error issue defined here:
+                // https://github.com/angular/angular.js/blob/master/CHANGELOG.md#timeout-due-to
+                try {
+                    $timeout.cancel(tokenRequestTimeout);
+                } catch (err) {
+                    console.error('Clearing timeout error: ' + String(err));
+                }
+
+                tokenRequestTimeout = null;
+            }
+        }
+
+        function exitToUrl(url) {
+            // token is no longer needed.
+            delete localStorage.token;
+            delete localStorage.origin;
+            notifyListeners('sessionTerminated', userSession);
+            // if the network is disconnected, the redirect will not work.
+            setTimeout(() => {
+                service.redirect(url);
+            }, 1500);
+        }
+
         function redirect(url) {
             $window.location.replace(url || 'badUrl.html');
         }
 
         function redirectToLogin() {
             const url = window.location.protocol + '//' + window.location.host + loginUrl + '?to=' + encodeURIComponent(window.location.href);
-            service.redirect(url);
+            service.exitToUrl(url);
         }
     };
 
@@ -460,7 +539,7 @@ function authProvider() {
                 value = parseInt(value);
             }
             if (!isNaN(value)) {
-                if (value > maxInactiveTimeout) {
+                if (value > maxInactiveTimeout || value < 0) {
                     monitor.timeoutInMins = maxInactiveTimeout;
                 } else {
                     // value cannot be less than 1 minute otherwise it is disabled to prevent users from being kicked out too early.
@@ -470,6 +549,10 @@ function authProvider() {
                     resetMonitor();
                 }
             }
+        };
+
+        monitor.getTimeoutInMins = () => {
+            return monitor.timeoutInMins;
         };
 
         monitor.getRemainingTime = () => {
